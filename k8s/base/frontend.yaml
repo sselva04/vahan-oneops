@@ -10,6 +10,8 @@ spec:
     metadata:
       labels: { app: frontend }
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull        # created once on the cluster with a GitHub token (see docs)
       containers:
         - name: frontend
           image: vahan-frontend

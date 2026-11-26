@@ -13,6 +13,8 @@ spec:
     metadata:
       labels: { app: backend }
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull        # created once on the cluster with a GitHub token (see docs)
       containers:
         - name: backend
           image: vahan-backend

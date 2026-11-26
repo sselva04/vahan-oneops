@@ -1,0 +1,77 @@
+name: Terraform dev
+
+# Pull request  -> plan only (read-only role), so you can read what would change
+# Merge to main -> plan again, then WAIT for approval, then apply (write role)
+on:
+  pull_request:
+    paths: ["terraform/envs/dev/**", ".github/workflows/terraform-dev.yml"]
+  push:
+    branches: [main]
+    paths: ["terraform/envs/dev/**", ".github/workflows/terraform-dev.yml"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # lets the job ask GitHub for the token AWS trusts
+  contents: read
+
+# Never run two Terraform jobs against the same state at once
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: ap-south-1
+
+defaults:
+  run:
+    working-directory: terraform/envs/dev
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::349152668028:role/github-terraform-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false
+      - run: terraform validate
+
+      - name: Plan
+        run: |
+          terraform plan -input=false -no-color | tee plan.txt
+          { echo '### Terraform plan (dev)'; echo '```'; tail -n 80 plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    # Only after a merge to main, and only after a person approves the "dev" environment
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::349152668028:role/github-terraform-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - run: terraform init -input=false
+
+      - name: Apply
+        run: |
+          terraform apply -input=false -auto-approve -no-color | tee apply.txt
+          { echo '### Terraform apply (dev)'; echo '```'; tail -n 40 apply.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

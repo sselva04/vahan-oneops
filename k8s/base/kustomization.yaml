@@ -8,8 +8,8 @@ resources:
   - backup.yaml
 images:
   - name: vahan-backend
-    newName: ghcr.io/OWNER/vahan-oneops-backend
+    newName: ghcr.io/sselva04/vahan-oneops-backend
     newTag: latest
   - name: vahan-frontend
-    newName: ghcr.io/OWNER/vahan-oneops-frontend
+    newName: ghcr.io/sselva04/vahan-oneops-frontend
     newTag: latest
