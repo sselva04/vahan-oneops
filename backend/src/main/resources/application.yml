@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: vahan-oneops
+  datasource:
+    url: ${VAHAN_DB_URL:jdbc:postgresql://localhost:5432/vahan}
+    username: ${VAHAN_DB_USER:vahan}
+    password: ${VAHAN_DB_PASSWORD:vahan}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # schema is owned by Flyway migrations, never by Hibernate
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+vahan:
+  jwt:
+    secret: ${VAHAN_JWT_SECRET}          # required, at least 32 characters
+    expiry-hours: 12
+  bootstrap:
+    admin-username: ${VAHAN_ADMIN_USERNAME:admin}
+    admin-password: ${VAHAN_ADMIN_PASSWORD:}   # only used when the user table is empty
+  cors:
+    allowed-origins: ${VAHAN_CORS_ORIGINS:http://localhost:5173}

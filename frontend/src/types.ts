@@ -1,0 +1,82 @@
+// Shapes returned by the backend. Keep in step with ProjectDtos.java and UserDto.java.
+
+export type Role = 'ADMIN' | 'EMPLOYEE'
+export type StageStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'ON_HOLD' | 'DONE'
+
+export interface User {
+  id: number
+  username: string
+  fullName: string
+  role: Role
+  active: boolean
+}
+
+export interface StageMaster {
+  id: number
+  name: string
+}
+
+export interface Stage {
+  id: number
+  stageMasterId: number
+  stageName: string
+  sequenceNo: number
+  assigneeId: number | null
+  assigneeName: string | null
+  status: StageStatus
+  dueDate: string | null
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export interface Part {
+  id: number
+  drawingNo: string
+  name: string
+  quantity: number
+  stages: Stage[]
+}
+
+export interface ProjectDetail {
+  id: number
+  drawingNo: string
+  name: string
+  createdAt: string
+  parts: Part[]
+}
+
+export interface ProjectSummary {
+  id: number
+  drawingNo: string
+  name: string
+  createdAt: string
+  partCount: number
+  stageCount: number
+  stagesDone: number
+  stagesUnassigned: number
+}
+
+export interface WorkItem {
+  stageId: number
+  projectId: number
+  projectDrawingNo: string
+  projectName: string
+  partId: number
+  partDrawingNo: string
+  partName: string
+  quantity: number
+  stageName: string
+  sequenceNo: number
+  status: StageStatus
+  dueDate: string | null
+  startedAt: string | null
+  completedAt: string | null
+  waitingFor: string[]
+}
+
+export const STATUS_LABEL: Record<StageStatus, string> = {
+  NOT_STARTED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  ON_HOLD: 'On hold',
+  DONE: 'Done',
+}

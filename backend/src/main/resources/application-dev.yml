@@ -1,0 +1,6 @@
+# Development only. Never use these values in production.
+vahan:
+  jwt:
+    secret: dev-only-secret-dev-only-secret-dev-only-1234
+  bootstrap:
+    admin-password: ChangeMe#123
