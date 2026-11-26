@@ -25,3 +25,9 @@ variable "github_repo" {
   type        = string
   default     = "vahan-oneops"
 }
+
+variable "github_sub_prefix" {
+  description = "Prefix of the GitHub OIDC subject claim, from: gh api repos/<owner>/<repo>/actions/oidc/customization/sub"
+  type        = string
+  default     = "repo:sselva04@95541329/vahan-oneops@1473112517"
+}

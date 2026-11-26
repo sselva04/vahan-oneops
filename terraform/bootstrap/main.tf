@@ -2,6 +2,11 @@ data "aws_caller_identity" "current" {}
 
 locals {
   repo = "${var.github_owner}/${var.github_repo}"
+
+  # GitHub now puts numeric IDs in the OIDC token subject (immutable subject), so a renamed or
+  # re-created repo cannot inherit this trust. Find yours with:
+  #   gh api repos/<owner>/<repo>/actions/oidc/customization/sub
+  sub_prefix = var.github_sub_prefix
 }
 
 # ---------------------------------------------------------------------------
@@ -104,8 +109,8 @@ data "aws_iam_policy_document" "plan_trust" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${local.repo}:pull_request",
-        "repo:${local.repo}:ref:refs/heads/main",
+        "${local.sub_prefix}:pull_request",
+        "${local.sub_prefix}:ref:refs/heads/main",
       ]
     }
   }
@@ -143,7 +148,7 @@ data "aws_iam_policy_document" "apply_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${local.repo}:environment:dev"]
+      values   = ["${local.sub_prefix}:environment:dev"]
     }
   }
 }
