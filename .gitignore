@@ -4,3 +4,11 @@ frontend/dist/
 .idea/
 *.iml
 .DS_Store
+*.tsbuildinfo
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+crash.log

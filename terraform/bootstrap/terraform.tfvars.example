@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (that file is git-ignored) and fill in:
+github_owner = "YOUR-GITHUB-USERNAME"

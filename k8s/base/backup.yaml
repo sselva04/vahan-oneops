@@ -1,0 +1,41 @@
+# Nightly database dump onto a separate volume, keeping the last 7. This protects against mistakes
+# and corruption. It does NOT protect against losing the whole server: copy dumps off-server too (see docs).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-backups
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+spec:
+  schedule: "30 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: dump
+              image: postgres:16-alpine
+              env:
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: vahan-secrets, key: db-password } }
+              command: ["/bin/sh", "-c"]
+              args:
+                - >
+                  pg_dump -h postgres -U vahan -d vahan -Fc -f /backups/vahan-$(date +%F).dump &&
+                  ls -1t /backups/vahan-*.dump | tail -n +8 | xargs -r rm -f
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+          volumes:
+            - name: backups
+              persistentVolumeClaim: { claimName: db-backups }

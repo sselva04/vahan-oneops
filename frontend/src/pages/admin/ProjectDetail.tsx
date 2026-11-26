@@ -162,36 +162,33 @@ function PartCard({ part, masters, users, apply, onStagesAdded }: PartCardProps)
   )
 }
 
-const CUSTOM = 'custom'
-interface Row { key: number; stage: number | '' | typeof CUSTOM; customName: string; assigneeId: number | ''; dueDate: string }
+interface Row { key: number; stageName: string; assigneeId: number | ''; dueDate: string }
 
-/** Lets the admin lay out several stages in order (with their owners) and save them in one go. */
+/**
+ * Lets the admin lay out several stages in order (with their owners) and save them in one go.
+ * The stage box is a type-in field: start typing to see the existing stages as suggestions,
+ * or type any new name. The server matches an existing stage by name or adds the new one.
+ */
 function RouteBuilder({ masters, users, onCancel, onSave }: {
   masters: StageMaster[]
   users: User[]
   onCancel: () => void
   onSave: (rows: { stageMasterId: number | null; customName: string | null; assigneeId: number | null; dueDate: string | null }[]) => Promise<void>
 }) {
-  const blank = (key: number): Row => ({ key, stage: '', customName: '', assigneeId: '', dueDate: '' })
+  const blank = (key: number): Row => ({ key, stageName: '', assigneeId: '', dueDate: '' })
   const [rows, setRows] = useState<Row[]>([blank(1)])
   const [nextKey, setNextKey] = useState(2)
-  const [problem, setProblem] = useState<string | null>(null)
 
   const change = (key: number, patch: Partial<Row>) =>
     setRows(rs => rs.map(r => (r.key === key ? { ...r, ...patch } : r)))
 
   const save = async () => {
-    const filled = rows.filter(r => r.stage !== '')
+    const filled = rows.filter(r => r.stageName.trim() !== '')
     if (filled.length === 0) return
-    if (filled.some(r => r.stage === CUSTOM && r.customName.trim() === '')) {
-      setProblem('Type a name for each custom stage, or choose one from the list.')
-      return
-    }
-    setProblem(null)
     try {
       await onSave(filled.map(r => ({
-        stageMasterId: r.stage === CUSTOM ? null : (r.stage as number),
-        customName: r.stage === CUSTOM ? r.customName.trim() : null,
+        stageMasterId: null,
+        customName: r.stageName.trim(),
         assigneeId: r.assigneeId === '' ? null : r.assigneeId,
         dueDate: r.dueDate || null,
       })))
@@ -201,28 +198,22 @@ function RouteBuilder({ masters, users, onCancel, onSave }: {
   return (
     <div className="builder">
       <h3>Stages, in order</h3>
+      <datalist id="stage-options">
+        {masters.map(m => <option key={m.id} value={m.name} />)}
+      </datalist>
       {rows.map((r, i) => (
         <div className="builder-row" key={r.key}>
           <span className="step">{i + 1}</span>
-          <select value={r.stage}
-            onChange={e => change(r.key, { stage: e.target.value === CUSTOM ? CUSTOM : e.target.value ? Number(e.target.value) : '' })}>
-            <option value="">Choose stage…</option>
-            {masters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            <option value={CUSTOM}>✎ Write a custom stage…</option>
-          </select>
+          <input list="stage-options" className="stage-input" placeholder="Type or pick a stage…" maxLength={80}
+            value={r.stageName} onChange={e => change(r.key, { stageName: e.target.value })} />
           <select value={r.assigneeId} onChange={e => change(r.key, { assigneeId: e.target.value ? Number(e.target.value) : '' })}>
             <option value="">Owner (decide later)</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
           </select>
           <input type="date" value={r.dueDate} onChange={e => change(r.key, { dueDate: e.target.value })} />
           {rows.length > 1 && <button className="link danger" onClick={() => setRows(rs => rs.filter(x => x.key !== r.key))}>✕</button>}
-          {r.stage === CUSTOM && (
-            <input className="custom-name" placeholder="Custom stage name, e.g. Deburring" maxLength={80}
-              value={r.customName} onChange={e => change(r.key, { customName: e.target.value })} autoFocus />
-          )}
         </div>
       ))}
-      {problem && <div className="error" role="alert">{problem}</div>}
       <div className="builder-actions">
         <button onClick={() => { setRows(rs => [...rs, blank(nextKey)]); setNextKey(k => k + 1) }}>+ Another stage</button>
         <span className="spacer" />

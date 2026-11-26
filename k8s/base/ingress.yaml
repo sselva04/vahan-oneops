@@ -1,0 +1,19 @@
+# One public address for the whole app. k3s ships with the Traefik ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oneops
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  rules:
+    - host: HOST_PLACEHOLDER          # replaced by each overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { number: 80 } }
+  tls:
+    - hosts: [HOST_PLACEHOLDER]
+      secretName: oneops-tls

@@ -86,7 +86,7 @@ table.stages select, table.stages input { padding: .35rem .45rem; }
 .builder { border-top: 1px dashed var(--line); margin-top: 1rem; padding-top: 1rem; }
 .builder h3 { margin-bottom: .6rem; }
 .builder-row { display: grid; grid-template-columns: 2rem 1.3fr 1.3fr 150px auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
-.builder-row .custom-name { grid-column: 2 / -1; }
+.builder-row .stage-input { min-width: 0; }
 .work-actions { margin-top: .8rem; }
 .work-actions button { width: 100%; padding: .8rem 1rem; font-size: 1.05rem; }
 button.primary.finish { background: var(--ok); border-color: var(--ok); }

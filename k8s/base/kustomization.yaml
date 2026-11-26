@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - backup.yaml
+images:
+  - name: vahan-backend
+    newName: ghcr.io/OWNER/vahan-oneops-backend
+    newTag: latest
+  - name: vahan-frontend
+    newName: ghcr.io/OWNER/vahan-oneops-frontend
+    newTag: latest
