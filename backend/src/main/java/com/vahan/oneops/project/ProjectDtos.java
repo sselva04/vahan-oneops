@@ -1,6 +1,7 @@
 package com.vahan.oneops.project;
 
 import jakarta.validation.Valid;
+import com.vahan.oneops.material.RmShape;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
@@ -90,10 +91,36 @@ public final class ProjectDtos {
         }
     }
 
-    public record PartDto(Long id, String drawingNo, String name, int quantity, List<StageDto> stages) {
+    /**
+     * Sets or clears the raw material of a part. materialId = null clears it (all other fields must then be empty).
+     * Sizes are in mm: BLOCK a=length b=width c=thickness, ROUND a=diameter b=length,
+     * TUBE a=outer diameter b=inner diameter c=length, MANUAL manualWeightKg = weight of one piece.
+     * actualWeightKg is the weighed stock for the whole part quantity and may be added later.
+     */
+    public record RawMaterialInput(
+            Long materialId,
+            RmShape shape,
+            @DecimalMin(value = "0.01", message = "Size must be above 0") @Digits(integer = 8, fraction = 2) BigDecimal dimA,
+            @DecimalMin(value = "0.01", message = "Size must be above 0") @Digits(integer = 8, fraction = 2) BigDecimal dimB,
+            @DecimalMin(value = "0.01", message = "Size must be above 0") @Digits(integer = 8, fraction = 2) BigDecimal dimC,
+            @DecimalMin(value = "0.001", message = "Weight must be above 0") @Digits(integer = 7, fraction = 3) BigDecimal manualWeightKg,
+            @DecimalMin(value = "0.001", message = "Weight must be above 0") @Digits(integer = 7, fraction = 3) BigDecimal actualWeightKg) {
     }
 
-    public record ProjectDetailDto(Long id, String drawingNo, String name, Instant createdAt, List<PartDto> parts) {
+    /** What the raw material of a part comes to. Cost uses the actual weight once it is entered, else the theoretical. */
+    public record RawMaterialDto(Long materialId, String materialName, RmShape shape,
+                                 BigDecimal dimA, BigDecimal dimB, BigDecimal dimC, BigDecimal manualWeightKg,
+                                 BigDecimal theoreticalPerPieceKg, BigDecimal theoreticalTotalKg,
+                                 BigDecimal actualWeightKg, BigDecimal differenceKg, BigDecimal differencePercent,
+                                 BigDecimal ratePerKg, BigDecimal cost, boolean costFromActual) {
+    }
+
+    public record PartDto(Long id, String drawingNo, String name, int quantity, List<StageDto> stages,
+                          RawMaterialDto rawMaterial) {
+    }
+
+    public record ProjectDetailDto(Long id, String drawingNo, String name, Instant createdAt, List<PartDto> parts,
+                                   BigDecimal rawMaterialCost) {
     }
 
     public record ProjectSummaryDto(Long id, String drawingNo, String name, Instant createdAt,

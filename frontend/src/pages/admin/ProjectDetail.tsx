@@ -2,7 +2,8 @@ import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'reac
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import { ErrorNote, StatusBadge, errorText, formatDateTime, formatMoney } from '../../components'
-import type { OutsourceInput, Part, ProjectDetail, Stage, StageMaster, Supplier, User } from '../../types'
+import { SHAPE_LABEL, previewPerPieceKg, sizeText } from '../../weight'
+import type { Material, OutsourceInput, Part, ProjectDetail, RawMaterialInput, RmShape, Stage, StageMaster, Supplier, User } from '../../types'
 
 export default function ProjectDetailPage() {
   const { id } = useParams()
@@ -11,11 +12,12 @@ export default function ProjectDetailPage() {
   const [masters, setMasters] = useState<StageMaster[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [materials, setMaterials] = useState<Material[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([api.project(projectId), api.stageMasters(), api.users(), api.suppliers(false)])
-      .then(([p, m, u, s]) => { setProject(p); setMasters(m); setUsers(u.filter(x => x.active)); setSuppliers(s) })
+    Promise.all([api.project(projectId), api.stageMasters(), api.users(), api.suppliers(false), api.materials(true)])
+      .then(([p, m, u, s, mat]) => { setProject(p); setMasters(m); setUsers(u.filter(x => x.active)); setSuppliers(s); setMaterials(mat) })
       .catch(e => setError(errorText(e)))
   }, [projectId])
 
@@ -41,13 +43,16 @@ export default function ProjectDetailPage() {
       <p className="crumbs"><Link to="/admin/projects">← Projects</Link></p>
       <h1>{project.drawingNo}</h1>
       <p className="muted">{project.name}</p>
+      {project.rawMaterialCost > 0 && (
+        <p className="rm-total">Raw material for this project: <strong>{formatMoney(project.rawMaterialCost)}</strong></p>
+      )}
       <ErrorNote message={error} />
 
       <AddPart onAdd={(p) => apply(() => api.addPart(project.id, p))} />
 
       {project.parts.length === 0 && <div className="empty">Add the child parts of this project above.</div>}
       {project.parts.map(part => (
-        <PartCard key={part.id} part={part} masters={masters} users={users} suppliers={suppliers} apply={apply} onStagesAdded={refreshMasters} />
+        <PartCard key={part.id} part={part} masters={masters} users={users} suppliers={suppliers} materials={materials} apply={apply} onStagesAdded={refreshMasters} />
       ))}
     </div>
   )
@@ -90,11 +95,12 @@ interface PartCardProps {
   masters: StageMaster[]
   users: User[]
   suppliers: Supplier[]
+  materials: Material[]
   apply: (action: () => Promise<ProjectDetail>) => Promise<void>
   onStagesAdded: () => void
 }
 
-function PartCard({ part, masters, users, suppliers, apply, onStagesAdded }: PartCardProps) {
+function PartCard({ part, masters, users, suppliers, materials, apply, onStagesAdded }: PartCardProps) {
   const [building, setBuilding] = useState(false)
   const [outsourcing, setOutsourcing] = useState<number | null>(null)   // id of the stage whose supplier form is open
   const stages = [...part.stages].sort((a, b) => a.sequenceNo - b.sequenceNo)
@@ -108,6 +114,8 @@ function PartCard({ part, masters, users, suppliers, apply, onStagesAdded }: Par
         </div>
         {!building && <button onClick={() => setBuilding(true)}>+ Add stages</button>}
       </div>
+
+      <RawMaterialSection part={part} materials={materials} apply={apply} />
 
       {stages.length === 0 && !building && (
         <p className="muted">No stages yet. Choose the stages this part goes through.</p>
@@ -194,6 +202,150 @@ function PartCard({ part, masters, users, suppliers, apply, onStagesAdded }: Par
           }} />
       )}
     </section>
+  )
+}
+
+/** Raw material of a part: material, shape and size give the theoretical weight; the weighed weight is entered after. */
+function RawMaterialSection({ part, materials, apply }: {
+  part: Part
+  materials: Material[]
+  apply: (action: () => Promise<ProjectDetail>) => Promise<void>
+}) {
+  const rm = part.rawMaterial
+  const [editing, setEditing] = useState(false)
+
+  if (editing) {
+    return <RawMaterialForm part={part} materials={materials} onCancel={() => setEditing(false)}
+      onSave={async (r) => { await apply(() => api.updateRawMaterial(part.id, r)); setEditing(false) }} />
+  }
+  if (!rm) {
+    return (
+      <div className="rm-box">
+        <span className="muted">No raw material yet.</span>
+        <button className="link" onClick={() => setEditing(true)}>Set raw material…</button>
+      </div>
+    )
+  }
+  const kg = (n: number | null) => (n === null ? '—' : `${n.toFixed(3)} kg`)
+  return (
+    <div className="rm-box">
+      <div>
+        <strong>{rm.materialName}</strong> · {sizeText(rm.shape, rm.dimA, rm.dimB, rm.dimC, rm.manualWeightKg)}
+        <div className="small">
+          Theoretical <strong>{kg(rm.theoreticalTotalKg)}</strong>
+          {part.quantity > 1 && <span className="muted"> ({kg(rm.theoreticalPerPieceKg)} × {part.quantity})</span>}
+          {' · '}Actual <strong>{kg(rm.actualWeightKg)}</strong>
+          {rm.differenceKg !== null && (
+            <span className={rm.differenceKg > 0 ? 'rm-over' : 'muted'}>
+              {' '}({rm.differenceKg > 0 ? '+' : ''}{rm.differenceKg.toFixed(3)} kg{rm.differencePercent !== null && `, ${rm.differencePercent > 0 ? '+' : ''}${rm.differencePercent}%`})
+            </span>
+          )}
+        </div>
+        <div className="small">
+          {rm.ratePerKg === null ? <span className="muted">No price set for this material</span>
+            : <>{formatMoney(rm.ratePerKg)}/kg · cost <strong>{formatMoney(rm.cost)}</strong>
+              <span className="muted"> (on {rm.costFromActual ? 'actual' : 'theoretical'} weight)</span></>}
+        </div>
+      </div>
+      <button className="link" onClick={() => setEditing(true)}>Edit</button>
+    </div>
+  )
+}
+
+function RawMaterialForm({ part, materials, onSave, onCancel }: {
+  part: Part
+  materials: Material[]
+  onSave: (r: RawMaterialInput) => Promise<void>
+  onCancel: () => void
+}) {
+  const rm = part.rawMaterial
+  const [materialId, setMaterialId] = useState<number | ''>(rm?.materialId ?? '')
+  const [shape, setShape] = useState<RmShape>(rm?.shape ?? 'BLOCK')
+  const text = (n: number | null | undefined) => (n == null ? '' : String(n))
+  const [a, setA] = useState(text(rm?.dimA))
+  const [b, setB] = useState(text(rm?.dimB))
+  const [c, setC] = useState(text(rm?.dimC))
+  const [manual, setManual] = useState(text(rm?.manualWeightKg))
+  const [actual, setActual] = useState(text(rm?.actualWeightKg))
+  const [saving, setSaving] = useState(false)
+
+  const usable = materials.filter(m => m.active || m.id === rm?.materialId)
+  const chosen = materials.find(m => m.id === materialId)
+  const perPiece = chosen ? previewPerPieceKg(shape, chosen.density, Number(a), Number(b), Number(c), Number(manual)) : null
+  const total = perPiece === null ? null : perPiece * part.quantity
+  const labels: Record<RmShape, [string, string, string]> = {
+    BLOCK: ['Length (mm)', 'Width (mm)', 'Thickness (mm)'],
+    ROUND: ['Diameter (mm)', 'Length (mm)', ''],
+    TUBE: ['Outer Ø (mm)', 'Inner Ø (mm)', 'Length (mm)'],
+    MANUAL: ['', '', ''],
+  }
+  const num = (s: string) => (s.trim() === '' ? null : Number(s))
+
+  const save = async (clear: boolean) => {
+    setSaving(true)
+    try {
+      await onSave(clear || materialId === '' ? {
+        materialId: null, shape: null, dimA: null, dimB: null, dimC: null, manualWeightKg: null, actualWeightKg: null,
+      } : {
+        materialId, shape,
+        dimA: shape === 'MANUAL' ? null : num(a),
+        dimB: shape === 'MANUAL' ? null : num(b),
+        dimC: shape === 'BLOCK' || shape === 'TUBE' ? num(c) : null,
+        manualWeightKg: shape === 'MANUAL' ? num(manual) : null,
+        actualWeightKg: num(actual),
+      })
+    } catch { /* the page shows the error */ } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="outsource">
+      <h3>Raw material for {part.drawingNo}</h3>
+      <div className="grid">
+        <label>Material
+          <select value={materialId} onChange={e => setMaterialId(e.target.value ? Number(e.target.value) : '')}>
+            <option value="">— none —</option>
+            {usable.map(m => <option key={m.id} value={m.id}>{m.name}{m.active ? '' : ' (deactivated)'}</option>)}
+          </select>
+        </label>
+        <label>Shape
+          <select value={shape} onChange={e => setShape(e.target.value as RmShape)}>
+            {(Object.keys(SHAPE_LABEL) as RmShape[]).map(s => <option key={s} value={s}>{SHAPE_LABEL[s]}</option>)}
+          </select>
+        </label>
+      </div>
+      {shape === 'MANUAL' ? (
+        <div className="grid">
+          <label>Weight per piece (kg)
+            <input type="number" min={0} step="0.001" value={manual} onChange={e => setManual(e.target.value)} />
+          </label>
+        </div>
+      ) : (
+        <div className="grid">
+          <label>{labels[shape][0]}<input type="number" min={0} step="0.01" value={a} onChange={e => setA(e.target.value)} /></label>
+          <label>{labels[shape][1]}<input type="number" min={0} step="0.01" value={b} onChange={e => setB(e.target.value)} /></label>
+          {labels[shape][2] && (
+            <label>{labels[shape][2]}<input type="number" min={0} step="0.01" value={c} onChange={e => setC(e.target.value)} /></label>
+          )}
+        </div>
+      )}
+      <p className="rm-preview">
+        {chosen === undefined ? <span className="muted">Choose a material to see the weight.</span>
+          : total === null ? <span className="muted">Enter the size to see the weight.</span>
+          : <>Theoretical weight: <strong>{total.toFixed(3)} kg</strong>
+              <span className="muted"> ({perPiece!.toFixed(3)} kg × {part.quantity})</span></>}
+      </p>
+      <label>Actual weight, whole quantity (kg) — after weighing
+        <input type="number" min={0} step="0.001" value={actual} onChange={e => setActual(e.target.value)} placeholder="optional" />
+      </label>
+      <div className="builder-actions">
+        {rm && <button className="link danger" disabled={saving} onClick={() => save(true)}>Remove raw material</button>}
+        <span className="spacer" />
+        <button className="link" onClick={onCancel}>Cancel</button>
+        <button className="primary" disabled={saving || materialId === ''} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save'}</button>
+      </div>
+    </div>
   )
 }
 
