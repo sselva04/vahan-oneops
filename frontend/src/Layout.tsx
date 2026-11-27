@@ -15,6 +15,8 @@ export default function Layout() {
           {isAdmin && <NavLink to="/admin/machine-hours">Machine hours</NavLink>}
           {isAdmin && <NavLink to="/admin/tools">Tools</NavLink>}
           {isAdmin && <NavLink to="/admin/rejections">Rejections</NavLink>}
+          {isAdmin && <NavLink to="/admin/purchases">Purchases</NavLink>}
+          {isAdmin && <NavLink to="/admin/reports">Reports</NavLink>}
           {isAdmin && <NavLink to="/admin/suppliers">Suppliers</NavLink>}
           {isAdmin && <NavLink to="/admin/customers">Customers</NavLink>}
           {isAdmin && <NavLink to="/admin/materials">Materials</NavLink>}

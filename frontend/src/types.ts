@@ -344,3 +344,63 @@ export interface ToolInput {
   remarks: string | null
   count: number | null
 }
+
+// ---------- Release C: raw material purchases and monthly report ----------
+
+export interface RmPurchase {
+  id: number
+  partId: number
+  partDrawingNo: string | null
+  partName: string | null
+  projectId: number | null
+  projectDrawingNo: string | null
+  customerName: string | null
+  materialName: string | null
+  supplierId: number
+  supplierName: string | null
+  weightKg: number
+  ratePerKg: number
+  totalCost: number
+  inDate: string
+  outDate: string | null
+  remarks: string | null
+}
+
+export interface RmPurchaseInput {
+  partId: number
+  supplierId: number
+  weightKg: number
+  ratePerKg: number
+  inDate: string
+  outDate: string | null
+  remarks: string | null
+}
+
+export interface RmPurchaseList {
+  purchases: RmPurchase[]
+  totals: { weightKg: number; totalCost: number }
+}
+
+/** profit = turnover - (consumables + salary); the last four figures are for information only. */
+export interface MonthSummary {
+  month: string
+  machineEntries: number
+  machineHours: number
+  turnover: number
+  tax: number
+  consumables: number
+  salary: number
+  totalExpense: number
+  profit: number
+  notes: string | null
+  outsourcedCost: number
+  rejectionDebit: number
+  toolSpend: number
+  rmPurchases: number
+}
+
+export interface ExpenseInput {
+  consumables: number
+  salary: number
+  notes: string | null
+}

@@ -1,5 +1,5 @@
 import type {
-  Customer, MachineHourInput, MachineHourList, MachineHourEntry, MachineHourSettings, Tool, ToolInput, ToolResharpen, RejectionInput, RejectionRow, Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
+  Customer, ExpenseInput, MonthSummary, RmPurchase, RmPurchaseInput, RmPurchaseList, MachineHourInput, MachineHourList, MachineHourEntry, MachineHourSettings, Tool, ToolInput, ToolResharpen, RejectionInput, RejectionRow, Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -107,6 +107,35 @@ export const api = {
   addResharpen: (toolId: number, r: Pick<ToolResharpen, 'resharpenedOn' | 'cost'>) =>
     post<Tool>(`/admin/tools/${toolId}/resharpens`, r),
   deleteResharpen: (id: number) => del<Tool>(`/admin/tools/resharpens/${id}`),
+
+  rmPurchases: (month?: string, projectId?: number, supplierId?: number) => {
+    const q = new URLSearchParams()
+    if (month) q.set('month', month)
+    if (projectId) q.set('projectId', String(projectId))
+    if (supplierId) q.set('supplierId', String(supplierId))
+    const qs = q.toString()
+    return get<RmPurchaseList>(`/admin/rm-purchases${qs ? `?${qs}` : ''}`)
+  },
+  addRmPurchase: (p: RmPurchaseInput) => post<RmPurchase>('/admin/rm-purchases', p),
+  updateRmPurchase: (id: number, p: RmPurchaseInput) => put<RmPurchase>(`/admin/rm-purchases/${id}`, p),
+  deleteRmPurchase: (id: number) => del<void>(`/admin/rm-purchases/${id}`),
+
+  reportMonths: (from: string, count = 12) => get<MonthSummary[]>(`/admin/reports/months?from=${from}&count=${count}`),
+  saveExpenses: (month: string, e: ExpenseInput) => put<MonthSummary>(`/admin/reports/monthly/${month}/expenses`, e),
+  /** Downloads the month's CSV (needs the login token, so it can't be a plain link). */
+  downloadMonthCsv: async (month: string) => {
+    const token = tokenStore.get()
+    const res = await fetch(`${BASE}/api/admin/reports/monthly/${month}/csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`)
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `vahan-${month}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 
   customers: (includeInactive = false) =>
     get<Customer[]>(`/admin/customers?includeInactive=${includeInactive}`),
