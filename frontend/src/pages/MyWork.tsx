@@ -33,6 +33,7 @@ export function WorkList({ items, onStart, onComplete, busyId }: WorkListProps) 
               <strong>{w.partDrawingNo}</strong> · {w.partName} · qty {w.quantity}
             </div>
             <div className="muted small">Project {w.projectDrawingNo} · {w.projectName}</div>
+            {w.supplierName && <div className="supplier-line">At supplier: <strong>{w.supplierName}</strong></div>}
             <div className="work-foot">
               <span className={overdue ? 'overdue' : 'muted'}>
                 Due {formatDate(w.dueDate)}{overdue ? ' (late)' : ''}

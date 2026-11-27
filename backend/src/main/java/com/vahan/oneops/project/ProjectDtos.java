@@ -1,11 +1,14 @@
 package com.vahan.oneops.project;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -46,6 +49,20 @@ public final class ProjectDtos {
     public record CreateStageMaster(@NotBlank @Size(max = 80) String name) {
     }
 
+    /**
+     * Replaces the supplier details of one stage. supplierId = null means the stage is done in-house
+     * (then quantity and rate must be empty). Quantity and rate are per the supplier's sheet: pieces sent, cost per piece.
+     */
+    public record OutsourceInput(
+            Long supplierId,
+            @Min(value = 1, message = "Quantity must be at least 1") Integer jobQty,
+            @DecimalMin(value = "0", message = "Rate cannot be negative")
+            @Digits(integer = 10, fraction = 2, message = "Rate can have at most 2 decimals") BigDecimal ratePerUnit,
+            boolean preInspectionDone,
+            boolean finalInspectionDone,
+            @Size(max = 500) String remarks) {
+    }
+
     // ---------- responses ----------
 
     public record StageMasterDto(Long id, String name) {
@@ -56,12 +73,20 @@ public final class ProjectDtos {
 
     public record StageDto(Long id, Long stageMasterId, String stageName, int sequenceNo,
                            Long assigneeId, String assigneeName, StageStatus status, LocalDate dueDate,
-                           Instant startedAt, Instant completedAt) {
-        static StageDto from(PartStage s, Map<Long, String> names) {
+                           Instant startedAt, Instant completedAt,
+                           Long supplierId, String supplierName, Integer jobQty, BigDecimal ratePerUnit,
+                           BigDecimal totalCost, boolean preInspectionDone, boolean finalInspectionDone,
+                           String remarks) {
+        static StageDto from(PartStage s, Map<Long, String> names, Map<Long, String> supplierNames) {
             Long assignee = s.getAssigneeId();
+            Long supplier = s.getSupplierId();
+            BigDecimal total = s.getJobQty() != null && s.getRatePerUnit() != null
+                    ? s.getRatePerUnit().multiply(BigDecimal.valueOf(s.getJobQty().longValue())) : null;
             return new StageDto(s.getId(), s.getStageMaster().getId(), s.getStageMaster().getName(),
                     s.getSequenceNo(), assignee, assignee == null ? null : names.get(assignee),
-                    s.getStatus(), s.getDueDate(), s.getStartedAt(), s.getCompletedAt());
+                    s.getStatus(), s.getDueDate(), s.getStartedAt(), s.getCompletedAt(),
+                    supplier, supplier == null ? null : supplierNames.get(supplier), s.getJobQty(),
+                    s.getRatePerUnit(), total, s.isPreInspectionDone(), s.isFinalInspectionDone(), s.getRemarks());
         }
     }
 
@@ -79,6 +104,7 @@ public final class ProjectDtos {
     public record WorkItemDto(Long stageId, Long projectId, String projectDrawingNo, String projectName,
                               Long partId, String partDrawingNo, String partName, int quantity,
                               String stageName, int sequenceNo, StageStatus status, LocalDate dueDate,
-                              Instant startedAt, Instant completedAt, List<String> waitingFor) {
+                              Instant startedAt, Instant completedAt, List<String> waitingFor,
+                              String supplierName) {
     }
 }

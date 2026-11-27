@@ -1,5 +1,5 @@
 import type {
-  ProjectDetail, ProjectSummary, Role, StageMaster, User, WorkItem,
+  OutsourceInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -93,5 +93,13 @@ export const api = {
   updateStage: (stageId: number, assigneeId: number | null, dueDate: string | null) =>
     put<ProjectDetail>(`/admin/stages/${stageId}`, { assigneeId, dueDate }),
   deleteStage: (stageId: number) => del<ProjectDetail>(`/admin/stages/${stageId}`),
+  updateOutsourcing: (stageId: number, o: OutsourceInput) =>
+    put<ProjectDetail>(`/admin/stages/${stageId}/outsourcing`, o),
+
+  suppliers: (includeInactive = false) =>
+    get<Supplier[]>(`/admin/suppliers?includeInactive=${includeInactive}`),
+  createSupplier: (s: SupplierInput) => post<Supplier>('/admin/suppliers', s),
+  updateSupplier: (id: number, s: SupplierInput) => put<Supplier>(`/admin/suppliers/${id}`, s),
+  setSupplierActive: (id: number, active: boolean) => patch<Supplier>(`/admin/suppliers/${id}`, { active }),
   createStageMaster: (name: string) => post<StageMaster>('/admin/stage-master', { name }),
 }

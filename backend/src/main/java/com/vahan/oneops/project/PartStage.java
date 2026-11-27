@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -59,6 +60,28 @@ public class PartStage {
     @Column(name = "completed_by")
     private Long completedBy;
 
+    // ---- only for a stage that is given to a supplier (supplierId is empty for in-house work) ----
+
+    /** Plain id of the supplier doing this stage. */
+    @Column(name = "supplier_id")
+    private Long supplierId;
+
+    /** How many pieces were sent; may be fewer than the part quantity. */
+    @Column(name = "job_qty")
+    private Integer jobQty;
+
+    @Column(name = "rate_per_unit", precision = 12, scale = 2)
+    private BigDecimal ratePerUnit;
+
+    @Column(name = "pre_inspection_done", nullable = false)
+    private boolean preInspectionDone;
+
+    @Column(name = "final_inspection_done", nullable = false)
+    private boolean finalInspectionDone;
+
+    @Column(length = 500)
+    private String remarks;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -86,6 +109,18 @@ public class PartStage {
     public Instant getStartedAt() { return startedAt; }
     public Instant getCompletedAt() { return completedAt; }
     public Long getCompletedBy() { return completedBy; }
+    public Long getSupplierId() { return supplierId; }
+    public void setSupplierId(Long supplierId) { this.supplierId = supplierId; }
+    public Integer getJobQty() { return jobQty; }
+    public void setJobQty(Integer jobQty) { this.jobQty = jobQty; }
+    public BigDecimal getRatePerUnit() { return ratePerUnit; }
+    public void setRatePerUnit(BigDecimal ratePerUnit) { this.ratePerUnit = ratePerUnit; }
+    public boolean isPreInspectionDone() { return preInspectionDone; }
+    public void setPreInspectionDone(boolean preInspectionDone) { this.preInspectionDone = preInspectionDone; }
+    public boolean isFinalInspectionDone() { return finalInspectionDone; }
+    public void setFinalInspectionDone(boolean finalInspectionDone) { this.finalInspectionDone = finalInspectionDone; }
+    public String getRemarks() { return remarks; }
+    public void setRemarks(String remarks) { this.remarks = remarks; }
 
     public void start() {
         this.status = StageStatus.IN_PROGRESS;

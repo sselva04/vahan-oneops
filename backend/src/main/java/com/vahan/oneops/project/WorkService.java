@@ -4,6 +4,8 @@ import com.vahan.oneops.common.ConflictException;
 import com.vahan.oneops.common.ForbiddenException;
 import com.vahan.oneops.common.NotFoundException;
 import com.vahan.oneops.project.ProjectDtos.WorkItemDto;
+import com.vahan.oneops.supplier.Supplier;
+import com.vahan.oneops.supplier.SupplierRepository;
 import com.vahan.oneops.user.UserDirectory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -23,10 +26,12 @@ public class WorkService {
 
     private final PartStageRepository stages;
     private final UserDirectory users;
+    private final SupplierRepository suppliers;
 
-    public WorkService(PartStageRepository stages, UserDirectory users) {
+    public WorkService(PartStageRepository stages, UserDirectory users, SupplierRepository suppliers) {
         this.stages = stages;
         this.users = users;
+        this.suppliers = suppliers;
     }
 
     // ---------- reading ----------
@@ -41,6 +46,11 @@ public class WorkService {
         // All stages of those parts, so we can tell which earlier stages are still unfinished.
         Map<Long, List<PartStage>> byPart = stages.findForParts(partIds).stream()
                 .collect(Collectors.groupingBy(s -> s.getChildPart().getId()));
+        // Names of the suppliers, for stages that are given to one.
+        Set<Long> supplierIds = mine.stream().map(PartStage::getSupplierId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> supplierNames = supplierIds.isEmpty() ? Map.of()
+                : suppliers.findAllById(supplierIds).stream().collect(Collectors.toMap(Supplier::getId, Supplier::getName));
 
         return mine.stream()
                 .sorted(Comparator
@@ -54,7 +64,8 @@ public class WorkService {
                     return new WorkItemDto(s.getId(), project.getId(), project.getDrawingNo(), project.getName(),
                             part.getId(), part.getDrawingNo(), part.getName(), part.getQuantity(),
                             s.getStageMaster().getName(), s.getSequenceNo(), s.getStatus(), s.getDueDate(),
-                            s.getStartedAt(), s.getCompletedAt(), waitingFor(byPart.get(part.getId()), s));
+                            s.getStartedAt(), s.getCompletedAt(), waitingFor(byPart.get(part.getId()), s),
+                            s.getSupplierId() == null ? null : supplierNames.get(s.getSupplierId()));
                 })
                 .toList();
     }
