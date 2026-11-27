@@ -7,7 +7,9 @@ import ChangePassword from './pages/ChangePassword'
 import Users from './pages/admin/Users'
 import Projects from './pages/admin/Projects'
 import Customers from './pages/admin/Customers'
+import MachineHours from './pages/admin/MachineHours'
 import Materials from './pages/admin/Materials'
+import Tools from './pages/admin/Tools'
 import Rejections from './pages/admin/Rejections'
 import Suppliers from './pages/admin/Suppliers'
 import ProjectDetailPage from './pages/admin/ProjectDetail'
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="/admin/materials" element={<RequireAdmin><Materials /></RequireAdmin>} />
         <Route path="/admin/customers" element={<RequireAdmin><Customers /></RequireAdmin>} />
         <Route path="/admin/rejections" element={<RequireAdmin><Rejections /></RequireAdmin>} />
+        <Route path="/admin/machine-hours" element={<RequireAdmin><MachineHours /></RequireAdmin>} />
+        <Route path="/admin/tools" element={<RequireAdmin><Tools /></RequireAdmin>} />
         <Route path="/admin/users" element={<RequireAdmin><Users /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
