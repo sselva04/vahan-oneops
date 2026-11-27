@@ -234,3 +234,113 @@ export const STATUS_LABEL: Record<StageStatus, string> = {
   ON_HOLD: 'On hold',
   DONE: 'Done',
 }
+
+// ---------- Release B: machine hours and tools ----------
+
+export interface MachineHourSettings {
+  ratePerHour: number
+  taxPercent: number
+}
+
+export interface MachineHourEntry {
+  id: number
+  entryDate: string
+  projectId: number
+  projectDrawingNo: string | null
+  projectName: string | null
+  customerName: string | null
+  childPartId: number | null
+  partDrawingNo: string | null
+  partName: string | null
+  quantity: number
+  hardened: boolean
+  designMinutes: number
+  settingMinutes: number
+  runMinutes: number
+  idleMinutes: number
+  powerCutMinutes: number
+  billableHours: number
+  ratePerHour: number
+  taxPercent: number
+  amount: number
+  taxAmount: number
+  total: number
+  remarks: string | null
+}
+
+export interface MachineHourTotals {
+  billableHours: number
+  amount: number
+  taxAmount: number
+  total: number
+}
+
+export interface MachineHourList {
+  entries: MachineHourEntry[]
+  totals: MachineHourTotals
+}
+
+/** Empty minutes count as 0; empty ratePerHour = the default (new entry) or the entry's own rate (edit). */
+export interface MachineHourInput {
+  entryDate: string
+  projectId: number
+  childPartId: number | null
+  quantity: number
+  hardened: boolean
+  designMinutes: number | null
+  settingMinutes: number | null
+  runMinutes: number | null
+  idleMinutes: number | null
+  powerCutMinutes: number | null
+  ratePerHour: number | null
+  remarks: string | null
+}
+
+export type ToolStatus = 'IN_STOCK' | 'ISSUED' | 'BROKEN' | 'SCRAPPED'
+
+export interface ToolResharpen {
+  id: number
+  resharpenedOn: string | null
+  cost: number
+}
+
+export interface Tool {
+  id: number
+  toolType: string
+  description: string
+  itemCode: string | null
+  toolSize: string | null
+  cost: number
+  purchasedOn: string | null
+  issuedOn: string | null
+  brokenOn: string | null
+  scrappedOn: string | null
+  brokenReason: string | null
+  brokenProjectId: number | null
+  brokenProjectDrawingNo: string | null
+  brokenPartId: number | null
+  brokenPartDrawingNo: string | null
+  remarks: string | null
+  status: ToolStatus
+  resharpens: ToolResharpen[]
+  resharpenCount: number
+  resharpenCost: number
+  totalCost: number
+}
+
+export interface ToolInput {
+  toolType: string
+  description: string
+  itemCode: string | null
+  toolSize: string | null
+  cost: number | null
+  purchasedOn: string | null
+  issuedOn: string | null
+  brokenOn: string | null
+  scrappedOn: string | null
+  brokenReason: string | null
+  brokenProjectId: number | null
+  brokenPartId: number | null
+  remarks: string | null
+  count: number | null
+}

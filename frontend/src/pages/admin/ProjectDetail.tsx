@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import { ErrorNote, StatusBadge, errorText, formatDate, formatDateTime, formatMoney } from '../../components'
 import { SHAPE_LABEL, previewPerPieceKg, sizeText } from '../../weight'
-import type { Customer, Material, OutsourceInput, Part, ProjectDetail, RawMaterialInput, Rejection, RejectionInput, RmShape, Stage, StageMaster, Supplier, User } from '../../types'
+import type { MachineHourTotals, Customer, Material, OutsourceInput, Part, ProjectDetail, RawMaterialInput, Rejection, RejectionInput, RmShape, Stage, StageMaster, Supplier, User } from '../../types'
 
 export default function ProjectDetailPage() {
   const { id } = useParams()
@@ -45,6 +45,7 @@ export default function ProjectDetailPage() {
       <h1>{project.drawingNo}</h1>
       <p className="muted">{project.name}</p>
       <CustomerLine project={project} customers={customers} apply={apply} />
+      <MachineHourSummary projectId={project.id} />
       {project.rawMaterialCost > 0 && (
         <p className="rm-total">Raw material for this project: <strong>{formatMoney(project.rawMaterialCost)}</strong></p>
       )}
@@ -228,6 +229,21 @@ function PartCard({ part, masters, users, suppliers, materials, apply, onStagesA
           }} />
       )}
     </section>
+  )
+}
+
+/** Machine hours logged against this project (all time), from the Machine hours page. */
+function MachineHourSummary({ projectId }: { projectId: number }) {
+  const [totals, setTotals] = useState<{ count: number; t: MachineHourTotals } | null>(null)
+  useEffect(() => {
+    api.machineHours(undefined, projectId).then(l => setTotals({ count: l.entries.length, t: l.totals })).catch(() => {})
+  }, [projectId])
+  if (!totals || totals.count === 0) return null
+  return (
+    <p className="rm-total">
+      VMC machine hours: <strong>{totals.t.billableHours.toFixed(2)} h</strong> ({totals.count} entries) ·{' '}
+      <strong>{formatMoney(totals.t.amount)}</strong> + tax {formatMoney(totals.t.taxAmount)}
+    </p>
   )
 }
 

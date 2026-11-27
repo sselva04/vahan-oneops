@@ -1,5 +1,5 @@
 import type {
-  Customer, RejectionInput, RejectionRow, Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
+  Customer, MachineHourInput, MachineHourList, MachineHourEntry, MachineHourSettings, Tool, ToolInput, ToolResharpen, RejectionInput, RejectionRow, Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -86,6 +86,27 @@ export const api = {
     post<ProjectDetail>('/admin/projects', { drawingNo, name, customerId }),
   setProjectCustomer: (projectId: number, customerId: number) =>
     put<ProjectDetail>(`/admin/projects/${projectId}/customer`, { customerId }),
+
+  machineHourSettings: () => get<MachineHourSettings>('/admin/machine-hour-settings'),
+  saveMachineHourSettings: (s: MachineHourSettings) => put<MachineHourSettings>('/admin/machine-hour-settings', s),
+  machineHours: (month?: string, projectId?: number) => {
+    const q = new URLSearchParams()
+    if (month) q.set('month', month)
+    if (projectId) q.set('projectId', String(projectId))
+    const qs = q.toString()
+    return get<MachineHourList>(`/admin/machine-hours${qs ? `?${qs}` : ''}`)
+  },
+  addMachineHour: (e: MachineHourInput) => post<MachineHourEntry>('/admin/machine-hours', e),
+  updateMachineHour: (id: number, e: MachineHourInput) => put<MachineHourEntry>(`/admin/machine-hours/${id}`, e),
+  deleteMachineHour: (id: number) => del<void>(`/admin/machine-hours/${id}`),
+
+  tools: (status?: string) => get<Tool[]>(`/admin/tools${status ? `?status=${status}` : ''}`),
+  addTools: (t: ToolInput) => post<Tool[]>('/admin/tools', t),
+  updateTool: (id: number, t: ToolInput) => put<Tool>(`/admin/tools/${id}`, t),
+  deleteTool: (id: number) => del<void>(`/admin/tools/${id}`),
+  addResharpen: (toolId: number, r: Pick<ToolResharpen, 'resharpenedOn' | 'cost'>) =>
+    post<Tool>(`/admin/tools/${toolId}/resharpens`, r),
+  deleteResharpen: (id: number) => del<Tool>(`/admin/tools/resharpens/${id}`),
 
   customers: (includeInactive = false) =>
     get<Customer[]>(`/admin/customers?includeInactive=${includeInactive}`),
