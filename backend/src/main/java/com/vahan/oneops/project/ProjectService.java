@@ -6,7 +6,12 @@ import com.vahan.oneops.common.NotFoundException;
 import com.vahan.oneops.project.ProjectDtos.AddPart;
 import com.vahan.oneops.project.ProjectDtos.AddStages;
 import com.vahan.oneops.project.ProjectDtos.CreateProject;
+import com.vahan.oneops.material.Material;
+import com.vahan.oneops.material.MaterialRepository;
+import com.vahan.oneops.material.WeightCalculator;
 import com.vahan.oneops.project.ProjectDtos.OutsourceInput;
+import com.vahan.oneops.project.ProjectDtos.RawMaterialDto;
+import com.vahan.oneops.project.ProjectDtos.RawMaterialInput;
 import com.vahan.oneops.project.ProjectDtos.PartDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectDetailDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectSummaryDto;
@@ -20,6 +25,8 @@ import com.vahan.oneops.user.UserDirectory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,15 +47,18 @@ public class ProjectService {
     private final StageMasterRepository masters;
     private final UserDirectory users;
     private final SupplierRepository suppliers;
+    private final MaterialRepository materials;
 
     public ProjectService(ProjectRepository projects, ChildPartRepository parts, PartStageRepository stages,
-                          StageMasterRepository masters, UserDirectory users, SupplierRepository suppliers) {
+                          StageMasterRepository masters, UserDirectory users, SupplierRepository suppliers,
+                          MaterialRepository materials) {
         this.projects = projects;
         this.parts = parts;
         this.stages = stages;
         this.masters = masters;
         this.users = users;
         this.suppliers = suppliers;
+        this.materials = materials;
     }
 
     // ---------- reading ----------
@@ -105,6 +115,90 @@ public class ProjectService {
         }
         parts.save(new ChildPart(project, drawingNo, r.name().trim(), r.quantity()));
         return detail(project);
+    }
+
+    /**
+     * Sets (or, with no material, clears) the raw material of a part. The price per kg is copied from the
+     * material now, so saving again picks up a changed price while untouched parts keep their old one.
+     */
+    @Transactional
+    public ProjectDetailDto updateRawMaterial(Long partId, RawMaterialInput r) {
+        ChildPart part = findPart(partId);
+        if (r.materialId() == null) {
+            if (r.shape() != null || r.dimA() != null || r.dimB() != null || r.dimC() != null
+                    || r.manualWeightKg() != null || r.actualWeightKg() != null) {
+                throw new BadRequestException("Choose a material first");
+            }
+            part.setRawMaterial(null, null, null, null, null, null, null, null);
+            return detail(part.getProject());
+        }
+        Material material = materials.findById(r.materialId())
+                .orElseThrow(() -> new BadRequestException("Unknown material"));
+        if (!material.isActive() && !material.getId().equals(part.getMaterialId())) {
+            throw new BadRequestException("This material is deactivated");
+        }
+        if (r.shape() == null) {
+            throw new BadRequestException("Choose a shape");
+        }
+        requireSizes(r);
+        part.setRawMaterial(material.getId(), r.shape(), r.dimA(), r.dimB(), r.dimC(), r.manualWeightKg(),
+                r.actualWeightKg(), material.getPricePerKg());
+        return detail(part.getProject());
+    }
+
+    /** Each shape needs exactly its own sizes; anything else is rejected so no stale value is kept. */
+    private static void requireSizes(RawMaterialInput r) {
+        boolean a = r.dimA() != null, b = r.dimB() != null, c = r.dimC() != null, m = r.manualWeightKg() != null;
+        switch (r.shape()) {
+            case BLOCK -> {
+                if (!(a && b && c) || m) {
+                    throw new BadRequestException("A block needs length, width and thickness");
+                }
+            }
+            case ROUND -> {
+                if (!(a && b) || c || m) {
+                    throw new BadRequestException("A round bar needs diameter and length");
+                }
+            }
+            case TUBE -> {
+                if (!(a && b && c) || m) {
+                    throw new BadRequestException("A tube needs outer diameter, inner diameter and length");
+                }
+                if (r.dimB().compareTo(r.dimA()) >= 0) {
+                    throw new BadRequestException("The inner diameter must be smaller than the outer diameter");
+                }
+            }
+            case MANUAL -> {
+                if (a || b || c || !m) {
+                    throw new BadRequestException("Enter only the weight per piece");
+                }
+            }
+        }
+    }
+
+    private RawMaterialDto rawMaterial(ChildPart p, Map<Long, Material> byId) {
+        Material m = p.getMaterialId() == null ? null : byId.get(p.getMaterialId());
+        if (m == null || p.getRmShape() == null) {
+            return null;
+        }
+        BigDecimal perPiece = WeightCalculator.perPieceKg(p.getRmShape(), m.getDensity(),
+                p.getRmDimA(), p.getRmDimB(), p.getRmDimC(), p.getManualWeightKg());
+        BigDecimal theoretical = WeightCalculator.totalKg(perPiece, p.getQuantity());
+        BigDecimal actual = p.getActualWeightKg();
+        BigDecimal diff = null;
+        BigDecimal diffPct = null;
+        if (actual != null) {
+            diff = actual.subtract(theoretical);
+            if (theoretical.signum() > 0) {
+                diffPct = diff.multiply(BigDecimal.valueOf(100)).divide(theoretical, 1, RoundingMode.HALF_UP);
+            }
+        }
+        BigDecimal rate = p.getRmRatePerKg();
+        BigDecimal basis = actual != null ? actual : theoretical;
+        BigDecimal cost = rate == null ? null : basis.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        return new RawMaterialDto(m.getId(), m.getName(), p.getRmShape(), p.getRmDimA(), p.getRmDimB(),
+                p.getRmDimC(), p.getManualWeightKg(), perPiece, theoretical, actual, diff, diffPct, rate, cost,
+                actual != null);
     }
 
     @Transactional
@@ -207,13 +301,27 @@ public class ProjectService {
                 s -> s.getChildPart().getId(),
                 Collectors.mapping(s -> StageDto.from(s, names, supplierNames), Collectors.toList())));
 
+        Set<Long> materialIds = new HashSet<>();
+        childParts.forEach(p -> {
+            if (p.getMaterialId() != null) {
+                materialIds.add(p.getMaterialId());
+            }
+        });
+        Map<Long, Material> materialById = materialIds.isEmpty() ? Map.of()
+                : materials.findAllById(materialIds).stream().collect(Collectors.toMap(Material::getId, m -> m));
+
         List<PartDto> partDtos = new ArrayList<>();
+        BigDecimal totalCost = BigDecimal.ZERO;
         for (ChildPart p : childParts) {
+            RawMaterialDto rm = rawMaterial(p, materialById);
+            if (rm != null && rm.cost() != null) {
+                totalCost = totalCost.add(rm.cost());
+            }
             partDtos.add(new PartDto(p.getId(), p.getDrawingNo(), p.getName(), p.getQuantity(),
-                    byPart.getOrDefault(p.getId(), List.of())));
+                    byPart.getOrDefault(p.getId(), List.of()), rm));
         }
         return new ProjectDetailDto(project.getId(), project.getDrawingNo(), project.getName(),
-                project.getCreatedAt(), partDtos);
+                project.getCreatedAt(), partDtos, totalCost);
     }
 
     /**

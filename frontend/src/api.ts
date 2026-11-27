@@ -1,5 +1,5 @@
 import type {
-  OutsourceInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
+  Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -95,6 +95,14 @@ export const api = {
   deleteStage: (stageId: number) => del<ProjectDetail>(`/admin/stages/${stageId}`),
   updateOutsourcing: (stageId: number, o: OutsourceInput) =>
     put<ProjectDetail>(`/admin/stages/${stageId}/outsourcing`, o),
+
+  materials: (includeInactive = false) =>
+    get<Material[]>(`/admin/materials?includeInactive=${includeInactive}`),
+  createMaterial: (m: MaterialInput) => post<Material>('/admin/materials', m),
+  updateMaterial: (id: number, m: MaterialInput) => put<Material>(`/admin/materials/${id}`, m),
+  setMaterialActive: (id: number, active: boolean) => patch<Material>(`/admin/materials/${id}`, { active }),
+  updateRawMaterial: (partId: number, r: RawMaterialInput) =>
+    put<ProjectDetail>(`/admin/parts/${partId}/raw-material`, r),
 
   suppliers: (includeInactive = false) =>
     get<Supplier[]>(`/admin/suppliers?includeInactive=${includeInactive}`),

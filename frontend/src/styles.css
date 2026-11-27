@@ -132,3 +132,9 @@ tr.detail-row td { background: #f8fafc; }
 @media (max-width: 720px) {
   .proc-row { grid-template-columns: 1fr; }
 }
+
+/* raw material */
+.rm-box { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: .6rem .8rem; margin: .5rem 0 .8rem; background: #f8fafc; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; }
+.rm-preview { margin: .2rem 0; font-size: 1.05rem; }
+.rm-total { margin: .2rem 0 .8rem; }
+.rm-over { color: #b45309; font-weight: 600; }

@@ -38,12 +38,58 @@ export interface Stage {
   remarks: string | null
 }
 
+export type RmShape = 'BLOCK' | 'ROUND' | 'TUBE' | 'MANUAL'
+
+export interface Material {
+  id: number
+  name: string
+  density: number          // g/cm3
+  pricePerKg: number | null
+  active: boolean
+}
+
+export interface MaterialInput {
+  name: string
+  density: number
+  pricePerKg: number | null
+}
+
+/** Sizes in mm: BLOCK a=length b=width c=thickness, ROUND a=diameter b=length, TUBE a=outer b=inner c=length. */
+export interface RawMaterialInput {
+  materialId: number | null
+  shape: RmShape | null
+  dimA: number | null
+  dimB: number | null
+  dimC: number | null
+  manualWeightKg: number | null
+  actualWeightKg: number | null
+}
+
+export interface RawMaterial {
+  materialId: number
+  materialName: string
+  shape: RmShape
+  dimA: number | null
+  dimB: number | null
+  dimC: number | null
+  manualWeightKg: number | null
+  theoreticalPerPieceKg: number
+  theoreticalTotalKg: number
+  actualWeightKg: number | null
+  differenceKg: number | null
+  differencePercent: number | null
+  ratePerKg: number | null
+  cost: number | null
+  costFromActual: boolean
+}
+
 export interface Part {
   id: number
   drawingNo: string
   name: string
   quantity: number
   stages: Stage[]
+  rawMaterial: RawMaterial | null
 }
 
 export interface ProjectDetail {
@@ -52,6 +98,7 @@ export interface ProjectDetail {
   name: string
   createdAt: string
   parts: Part[]
+  rawMaterialCost: number
 }
 
 export interface ProjectSummary {

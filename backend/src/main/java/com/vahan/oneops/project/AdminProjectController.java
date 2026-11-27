@@ -6,6 +6,7 @@ import com.vahan.oneops.project.ProjectDtos.AddStages;
 import com.vahan.oneops.project.ProjectDtos.CreateProject;
 import com.vahan.oneops.project.ProjectDtos.CreateStageMaster;
 import com.vahan.oneops.project.ProjectDtos.OutsourceInput;
+import com.vahan.oneops.project.ProjectDtos.RawMaterialInput;
 import com.vahan.oneops.project.ProjectDtos.ProjectDetailDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectSummaryDto;
 import com.vahan.oneops.project.ProjectDtos.StageMasterDto;
@@ -73,6 +74,12 @@ public class AdminProjectController {
     }
 
     /** Give a stage to a supplier (or back to in-house) and record the job details. */
+    /** Set or clear the raw material of a part (material, shape, size, actual weight). */
+    @PutMapping("/parts/{id}/raw-material")
+    public ProjectDetailDto updateRawMaterial(@PathVariable Long id, @Valid @RequestBody RawMaterialInput request) {
+        return projects.updateRawMaterial(id, request);
+    }
+
     @PutMapping("/stages/{id}/outsourcing")
     public ProjectDetailDto updateOutsourcing(@PathVariable Long id, @Valid @RequestBody OutsourceInput request) {
         return projects.updateOutsourcing(id, request);
