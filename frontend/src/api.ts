@@ -62,6 +62,11 @@ export const api = {
   login: (username: string, password: string) =>
     post<{ token: string; user: User }>('/auth/login', { username, password }),
   me: () => get<User>('/auth/me'),
+  importStatus: () => get<{ enabled: boolean; batches: { batch: string; rows: Record<string, number> }[] }>('/admin/import/status'),
+  importBegin: (batch: string) => post<void>(`/admin/import/begin?batch=${encodeURIComponent(batch)}`),
+  importSection: (section: string, batch: string, rows: unknown[]) =>
+    post<{ created: number; skipped: number; problems: string[] }>(`/admin/import/${section}?batch=${encodeURIComponent(batch)}`, rows),
+  importRemove: (batch: string) => del<Record<string, number>>(`/admin/import/batches/${encodeURIComponent(batch)}`),
   changePassword: (currentPassword: string, newPassword: string) =>
     post<void>('/auth/change-password', { currentPassword, newPassword }),
 
