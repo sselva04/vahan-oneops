@@ -36,6 +36,60 @@ export interface Stage {
   preInspectionDone: boolean
   finalInspectionDone: boolean
   remarks: string | null
+  sentOn: string | null
+  receivedOn: string | null
+  turnaroundDays: number | null
+  rejectedQty: number
+  rejections: Rejection[]
+}
+
+export interface Customer {
+  id: number
+  name: string
+  active: boolean
+}
+
+export interface Rejection {
+  id: number
+  rejectedQty: number
+  partCost: number
+  machiningCost: number
+  debitAmount: number
+  debitManual: boolean
+  calculatedDebit: number
+  billNo: string | null
+  rejectedOn: string | null
+  remarks: string | null
+}
+
+/** debitAmount empty = let the server calculate (qty x part cost - machining cost, minimum 0). */
+export interface RejectionInput {
+  rejectedQty: number
+  partCost: number
+  machiningCost: number | null
+  debitAmount: number | null
+  billNo: string | null
+  rejectedOn: string | null
+  remarks: string | null
+}
+
+export interface RejectionRow {
+  id: number
+  supplierId: number
+  supplierName: string
+  projectId: number
+  projectDrawingNo: string
+  partDrawingNo: string
+  partName: string
+  stageName: string
+  rejectedQty: number
+  partCost: number
+  machiningCost: number
+  debitAmount: number
+  debitManual: boolean
+  billNo: string | null
+  rejectedOn: string | null
+  remarks: string | null
 }
 
 export type RmShape = 'BLOCK' | 'ROUND' | 'TUBE' | 'MANUAL'
@@ -99,6 +153,8 @@ export interface ProjectDetail {
   createdAt: string
   parts: Part[]
   rawMaterialCost: number
+  customerId: number | null
+  customerName: string | null
 }
 
 export interface ProjectSummary {
@@ -110,6 +166,7 @@ export interface ProjectSummary {
   stageCount: number
   stagesDone: number
   stagesUnassigned: number
+  customerName: string | null
 }
 
 export interface WorkItem {
@@ -146,6 +203,10 @@ export interface Supplier {
   mapUrl: string | null
   active: boolean
   processes: SupplierProcess[]
+  debitTotal: number
+  rejectedQty: number
+  avgTurnaroundDays: number | null
+  jobsReceived: number
 }
 
 export interface SupplierInput {
@@ -157,6 +218,8 @@ export interface SupplierInput {
 
 /** Gives a stage to a supplier (supplierId) or back to in-house (supplierId = null). */
 export interface OutsourceInput {
+  sentOn: string | null
+  receivedOn: string | null
   supplierId: number | null
   jobQty: number | null
   ratePerUnit: number | null

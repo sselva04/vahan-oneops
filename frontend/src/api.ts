@@ -1,5 +1,5 @@
 import type {
-  Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
+  Customer, RejectionInput, RejectionRow, Material, MaterialInput, OutsourceInput, RawMaterialInput, ProjectDetail, ProjectSummary, Role, StageMaster, Supplier, SupplierInput, User, WorkItem,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -82,8 +82,23 @@ export const api = {
 
   projects: () => get<ProjectSummary[]>('/admin/projects'),
   project: (id: number) => get<ProjectDetail>(`/admin/projects/${id}`),
-  createProject: (drawingNo: string, name: string) =>
-    post<ProjectDetail>('/admin/projects', { drawingNo, name }),
+  createProject: (drawingNo: string, name: string, customerId: number | null) =>
+    post<ProjectDetail>('/admin/projects', { drawingNo, name, customerId }),
+  setProjectCustomer: (projectId: number, customerId: number) =>
+    put<ProjectDetail>(`/admin/projects/${projectId}/customer`, { customerId }),
+
+  customers: (includeInactive = false) =>
+    get<Customer[]>(`/admin/customers?includeInactive=${includeInactive}`),
+  createCustomer: (name: string) => post<Customer>('/admin/customers', { name }),
+  renameCustomer: (id: number, name: string) => put<Customer>(`/admin/customers/${id}`, { name }),
+  setCustomerActive: (id: number, active: boolean) => patch<Customer>(`/admin/customers/${id}`, { active }),
+
+  addRejection: (stageId: number, r: RejectionInput) =>
+    post<ProjectDetail>(`/admin/stages/${stageId}/rejections`, r),
+  updateRejection: (id: number, r: RejectionInput) => put<ProjectDetail>(`/admin/rejections/${id}`, r),
+  deleteRejection: (id: number) => del<ProjectDetail>(`/admin/rejections/${id}`),
+  rejections: (supplierId?: number) =>
+    get<RejectionRow[]>(supplierId ? `/admin/rejections?supplierId=${supplierId}` : '/admin/rejections'),
   addPart: (projectId: number, p: { drawingNo: string; name: string; quantity: number }) =>
     post<ProjectDetail>(`/admin/projects/${projectId}/parts`, p),
   // A stage is either picked from the list (stageMasterId) or typed in (customName).

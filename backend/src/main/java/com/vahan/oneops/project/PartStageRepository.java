@@ -20,6 +20,11 @@ public interface PartStageRepository extends JpaRepository<PartStage, Long> {
             + "where s.assigneeId = :userId")
     List<PartStage> findAssignedTo(@Param("userId") Long userId);
 
+    /** Jobs that went out and came back, for the average turnaround of each supplier. */
+    @Query("select s from PartStage s where s.supplierId in :supplierIds "
+            + "and s.sentOn is not null and s.receivedOn is not null")
+    List<PartStage> findReceivedForSuppliers(@Param("supplierIds") Collection<Long> supplierIds);
+
     @Query("select coalesce(max(s.sequenceNo), 0) from PartStage s where s.childPart.id = :partId")
     int maxSequence(@Param("partId") Long partId);
 }

@@ -39,7 +39,9 @@ public final class SupplierDtos {
     public record ProcessDto(Long id, Long stageMasterId, String stageName, String contactPerson, String contactPhone) {
     }
 
+    /** debitTotal and rejectedQty come from the supplier's rejections; avgTurnaroundDays from jobs sent and received. */
     public record SupplierDto(Long id, String name, String address, String mapUrl, boolean active,
-                              List<ProcessDto> processes) {
+                              List<ProcessDto> processes, java.math.BigDecimal debitTotal, long rejectedQty,
+                              Double avgTurnaroundDays, int jobsReceived) {
     }
 }

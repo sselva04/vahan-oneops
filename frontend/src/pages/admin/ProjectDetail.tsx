@@ -1,9 +1,9 @@
 import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api'
-import { ErrorNote, StatusBadge, errorText, formatDateTime, formatMoney } from '../../components'
+import { ErrorNote, StatusBadge, errorText, formatDate, formatDateTime, formatMoney } from '../../components'
 import { SHAPE_LABEL, previewPerPieceKg, sizeText } from '../../weight'
-import type { Material, OutsourceInput, Part, ProjectDetail, RawMaterialInput, RmShape, Stage, StageMaster, Supplier, User } from '../../types'
+import type { Customer, Material, OutsourceInput, Part, ProjectDetail, RawMaterialInput, Rejection, RejectionInput, RmShape, Stage, StageMaster, Supplier, User } from '../../types'
 
 export default function ProjectDetailPage() {
   const { id } = useParams()
@@ -13,11 +13,12 @@ export default function ProjectDetailPage() {
   const [users, setUsers] = useState<User[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([api.project(projectId), api.stageMasters(), api.users(), api.suppliers(false), api.materials(true)])
-      .then(([p, m, u, s, mat]) => { setProject(p); setMasters(m); setUsers(u.filter(x => x.active)); setSuppliers(s); setMaterials(mat) })
+    Promise.all([api.project(projectId), api.stageMasters(), api.users(), api.suppliers(false), api.materials(true), api.customers(true)])
+      .then(([p, m, u, s, mat, c]) => { setProject(p); setMasters(m); setUsers(u.filter(x => x.active)); setSuppliers(s); setMaterials(mat); setCustomers(c) })
       .catch(e => setError(errorText(e)))
   }, [projectId])
 
@@ -43,6 +44,7 @@ export default function ProjectDetailPage() {
       <p className="crumbs"><Link to="/admin/projects">← Projects</Link></p>
       <h1>{project.drawingNo}</h1>
       <p className="muted">{project.name}</p>
+      <CustomerLine project={project} customers={customers} apply={apply} />
       {project.rawMaterialCost > 0 && (
         <p className="rm-total">Raw material for this project: <strong>{formatMoney(project.rawMaterialCost)}</strong></p>
       )}
@@ -103,6 +105,7 @@ interface PartCardProps {
 function PartCard({ part, masters, users, suppliers, materials, apply, onStagesAdded }: PartCardProps) {
   const [building, setBuilding] = useState(false)
   const [outsourcing, setOutsourcing] = useState<number | null>(null)   // id of the stage whose supplier form is open
+  const [rejecting, setRejecting] = useState<number | null>(null)       // id of the stage whose rejections are open
   const stages = [...part.stages].sort((a, b) => a.sequenceNo - b.sequenceNo)
 
   return (
@@ -155,12 +158,28 @@ function PartCard({ part, masters, users, suppliers, materials, apply, onStagesA
                         <div className="small">
                           {s.preInspectionDone ? '✓' : '○'} pre-inspection · {s.finalInspectionDone ? '✓' : '○'} final inspection
                         </div>
+                        {(s.sentOn || s.receivedOn) && (
+                          <div className="small">
+                            Sent {s.sentOn ? formatDate(s.sentOn) : '—'} · Received {s.receivedOn ? formatDate(s.receivedOn) : 'not yet'}
+                            {s.turnaroundDays !== null && <span className="muted"> ({s.turnaroundDays} days)</span>}
+                          </div>
+                        )}
                         {s.remarks && <div className="muted small">“{s.remarks}”</div>}
+                        {s.rejectedQty > 0 && (
+                          <div className="small rm-over">
+                            {s.rejectedQty} rejected · debit {formatMoney(s.rejections.reduce((t, r) => t + r.debitAmount, 0))}
+                          </div>
+                        )}
                       </div>
                     ) : <span className="muted">In-house</span>}
-                    <button className="link" onClick={() => setOutsourcing(outsourcing === s.id ? null : s.id)}>
+                    <button className="link" onClick={() => { setRejecting(null); setOutsourcing(outsourcing === s.id ? null : s.id) }}>
                       {s.supplierId !== null ? 'Edit' : 'Give to supplier…'}
                     </button>
+                    {s.supplierId !== null && (
+                      <button className="link" onClick={() => { setOutsourcing(null); setRejecting(rejecting === s.id ? null : s.id) }}>
+                        Rejections{s.rejections.length > 0 ? ` (${s.rejections.length})` : ''}
+                      </button>
+                    )}
                   </td>
                   <td>
                     <StatusBadge status={s.status} />
@@ -173,6 +192,13 @@ function PartCard({ part, masters, users, suppliers, materials, apply, onStagesA
                       <button className="link danger" onClick={() => apply(() => api.deleteStage(s.id)).catch(() => {})}>Remove</button>}
                   </td>
                 </tr>
+                {rejecting === s.id && (
+                  <tr className="detail-row">
+                    <td colSpan={7}>
+                      <RejectionPanel stage={s} apply={apply} onClose={() => setRejecting(null)} />
+                    </td>
+                  </tr>
+                )}
                 {outsourcing === s.id && (
                   <tr className="detail-row">
                     <td colSpan={7}>
@@ -202,6 +228,158 @@ function PartCard({ part, masters, users, suppliers, materials, apply, onStagesA
           }} />
       )}
     </section>
+  )
+}
+
+/** The project's customer: shown, and changeable by the admin. */
+function CustomerLine({ project, customers, apply }: {
+  project: ProjectDetail
+  customers: Customer[]
+  apply: (action: () => Promise<ProjectDetail>) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [choice, setChoice] = useState<number | ''>(project.customerId ?? '')
+  const usable = customers.filter(c => c.active || c.id === project.customerId)
+
+  if (!editing) {
+    return (
+      <p className="small">
+        Customer: {project.customerName ? <strong>{project.customerName}</strong> : <span className="rm-over">not set</span>}{' '}
+        <button className="link" onClick={() => { setChoice(project.customerId ?? ''); setEditing(true) }}>
+          {project.customerName ? 'Change' : 'Set customer…'}
+        </button>
+      </p>
+    )
+  }
+  return (
+    <p className="small">
+      Customer:{' '}
+      <select value={choice} onChange={e => setChoice(e.target.value ? Number(e.target.value) : '')}>
+        <option value="">— choose —</option>
+        {usable.map(c => <option key={c.id} value={c.id}>{c.name}{c.active ? '' : ' (deactivated)'}</option>)}
+      </select>{' '}
+      <button className="primary" disabled={choice === ''}
+        onClick={() => { if (choice !== '') apply(() => api.setProjectCustomer(project.id, choice)).then(() => setEditing(false)).catch(() => {}) }}>
+        Save
+      </button>{' '}
+      <button className="link" onClick={() => setEditing(false)}>Cancel</button>
+    </p>
+  )
+}
+
+/**
+ * Rejections of one supplier job: parts the supplier spoiled and what is debited to them.
+ * Debit = rejected pieces × part cost − machining cost (never below 0), unless an amount is typed in.
+ */
+function RejectionPanel({ stage, apply, onClose }: {
+  stage: Stage
+  apply: (action: () => Promise<ProjectDetail>) => Promise<void>
+  onClose: () => void
+}) {
+  const [editing, setEditing] = useState<Rejection | 'new' | null>(stage.rejections.length === 0 ? 'new' : null)
+  const [qty, setQty] = useState('')
+  const [partCost, setPartCost] = useState('')
+  const [machining, setMachining] = useState('')
+  const [debit, setDebit] = useState('')
+  const [bill, setBill] = useState('')
+  const [on, setOn] = useState('')
+  const [remarks, setRemarks] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const open = (r: Rejection | 'new') => {
+    setEditing(r)
+    const t = (n: number | null | undefined) => (n == null ? '' : String(n))
+    setQty(r === 'new' ? '' : t(r.rejectedQty))
+    setPartCost(r === 'new' ? '' : t(r.partCost))
+    setMachining(r === 'new' ? '' : t(r.machiningCost))
+    setDebit(r === 'new' || !r.debitManual ? '' : t(r.debitAmount))
+    setBill(r === 'new' ? '' : r.billNo ?? '')
+    setOn(r === 'new' ? new Date().toISOString().slice(0, 10) : r.rejectedOn ?? '')
+    setRemarks(r === 'new' ? '' : r.remarks ?? '')
+  }
+  const calculated = Math.max(0, (Number(qty) || 0) * (Number(partCost) || 0) - (Number(machining) || 0))
+
+  const submit = async () => {
+    const input: RejectionInput = {
+      rejectedQty: Number(qty),
+      partCost: Number(partCost),
+      machiningCost: machining.trim() === '' ? null : Number(machining),
+      debitAmount: debit.trim() === '' ? null : Number(debit),
+      billNo: bill.trim() || null,
+      rejectedOn: on || null,
+      remarks: remarks.trim() || null,
+    }
+    setSaving(true)
+    try {
+      await apply(() => (editing === 'new' ? api.addRejection(stage.id, input) : api.updateRejection((editing as Rejection).id, input)))
+      setEditing(null)
+    } catch { /* the page shows the error */ } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="outsource">
+      <h3>{stage.stageName} at {stage.supplierName}: rejections</h3>
+      {stage.rejections.length > 0 && (
+        <table>
+          <thead><tr><th>Date</th><th>Bill</th><th>Qty</th><th>Part cost</th><th>Machining</th><th>Debit</th><th>Remarks</th><th></th></tr></thead>
+          <tbody>
+            {stage.rejections.map(r => (
+              <tr key={r.id}>
+                <td>{formatDate(r.rejectedOn)}</td>
+                <td>{r.billNo ?? '—'}</td>
+                <td>{r.rejectedQty}</td>
+                <td>{formatMoney(r.partCost)}</td>
+                <td>{formatMoney(r.machiningCost)}</td>
+                <td><strong>{formatMoney(r.debitAmount)}</strong>{r.debitManual && <span className="muted small"> (typed)</span>}</td>
+                <td className="muted small">{r.remarks}</td>
+                <td className="actions">
+                  <button className="link" onClick={() => open(r)}>Edit</button>
+                  <button className="link danger" onClick={() => {
+                    if (window.confirm('Delete this rejection?')) apply(() => api.deleteRejection(r.id)).catch(() => {})
+                  }}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {editing === null ? (
+        <div className="builder-actions">
+          <button onClick={() => open('new')}>+ Record a rejection</button>
+          <span className="spacer" />
+          <button className="link" onClick={onClose}>Close</button>
+        </div>
+      ) : (
+        <>
+          <div className="grid">
+            <label>Rejected pieces<input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} /></label>
+            <label>Part cost per piece (₹)<input type="number" min={0} step="0.01" value={partCost} onChange={e => setPartCost(e.target.value)} /></label>
+            <label>Machining cost (₹)<input type="number" min={0} step="0.01" value={machining} onChange={e => setMachining(e.target.value)} placeholder="0" /></label>
+            <label>Bill no.<input value={bill} maxLength={40} onChange={e => setBill(e.target.value)} /></label>
+            <label>Date<input type="date" value={on} onChange={e => setOn(e.target.value)} /></label>
+          </div>
+          <p className="rm-preview">
+            Calculated debit: <strong>{formatMoney(calculated)}</strong>
+            <span className="muted small"> (pieces × part cost − machining cost, minimum 0)</span>
+          </p>
+          <div className="grid">
+            <label>Debit amount (₹), only to override
+              <input type="number" min={0} step="0.01" value={debit} onChange={e => setDebit(e.target.value)} placeholder="leave empty to use the calculated one" />
+            </label>
+          </div>
+          <label>Remarks
+            <input value={remarks} maxLength={500} onChange={e => setRemarks(e.target.value)} placeholder="e.g. wrong setting done in wire cut" />
+          </label>
+          <div className="builder-actions">
+            <span className="spacer" />
+            <button className="link" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="primary" disabled={saving || !qty || !partCost} onClick={submit}>{saving ? 'Saving…' : 'Save'}</button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -366,6 +544,9 @@ function OutsourceForm({ stage, part, suppliers, onSave, onCancel }: {
   const [pre, setPre] = useState(stage.preInspectionDone)
   const [fin, setFin] = useState(stage.finalInspectionDone)
   const [remarks, setRemarks] = useState(stage.remarks ?? '')
+  const today = new Date().toISOString().slice(0, 10)
+  const [sentOn, setSentOn] = useState(stage.sentOn ?? (stage.supplierId === null ? today : ''))
+  const [receivedOn, setReceivedOn] = useState(stage.receivedOn ?? '')
   const [saving, setSaving] = useState(false)
 
   const offering = suppliers.filter(s => s.processes.some(p => p.stageMasterId === stage.stageMasterId))
@@ -384,6 +565,8 @@ function OutsourceForm({ stage, part, suppliers, onSave, onCancel }: {
         preInspectionDone: pre,
         finalInspectionDone: fin,
         remarks: remarks.trim() || null,
+        sentOn: supplierId === '' ? null : sentOn || null,
+        receivedOn: supplierId === '' ? null : receivedOn || null,
       })
     } catch { /* the page shows the error */ } finally {
       setSaving(false)
@@ -409,6 +592,12 @@ function OutsourceForm({ stage, part, suppliers, onSave, onCancel }: {
           </label>
           <label>Rate per piece (₹)
             <input type="number" min={0} step="0.01" value={rate} onChange={e => setRate(e.target.value)} />
+          </label>
+          <label>Sent on
+            <input type="date" value={sentOn} onChange={e => setSentOn(e.target.value)} />
+          </label>
+          <label>Received on
+            <input type="date" value={receivedOn} min={sentOn || undefined} onChange={e => setReceivedOn(e.target.value)} />
           </label>
         </>}
       </div>

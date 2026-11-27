@@ -27,6 +27,10 @@ public class Project {
     @Column(name = "created_by", nullable = false, updatable = false)
     private Long createdBy;
 
+    /** Plain id of the customer; empty for projects created before customers existed. */
+    @Column(name = "customer_id")
+    private Long customerId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -43,5 +47,7 @@ public class Project {
     public String getDrawingNo() { return drawingNo; }
     public String getName() { return name; }
     public Long getCreatedBy() { return createdBy; }
+    public Long getCustomerId() { return customerId; }
+    public void setCustomerId(Long customerId) { this.customerId = customerId; }
     public Instant getCreatedAt() { return createdAt; }
 }

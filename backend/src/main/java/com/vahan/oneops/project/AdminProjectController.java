@@ -9,7 +9,10 @@ import com.vahan.oneops.project.ProjectDtos.OutsourceInput;
 import com.vahan.oneops.project.ProjectDtos.RawMaterialInput;
 import com.vahan.oneops.project.ProjectDtos.ProjectDetailDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectSummaryDto;
+import com.vahan.oneops.project.ProjectDtos.SetCustomer;
 import com.vahan.oneops.project.ProjectDtos.StageMasterDto;
+import com.vahan.oneops.project.RejectionDtos.RejectionInput;
+import com.vahan.oneops.project.RejectionDtos.RejectionRowDto;
 import com.vahan.oneops.project.ProjectDtos.UpdateStage;
 import com.vahan.oneops.project.ProjectDtos.WorkItemDto;
 import jakarta.validation.Valid;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,10 +38,12 @@ public class AdminProjectController {
 
     private final ProjectService projects;
     private final WorkService work;
+    private final RejectionService rejections;
 
-    public AdminProjectController(ProjectService projects, WorkService work) {
+    public AdminProjectController(ProjectService projects, WorkService work, RejectionService rejections) {
         this.projects = projects;
         this.work = work;
+        this.rejections = rejections;
     }
 
     @GetMapping("/projects")
@@ -54,6 +60,11 @@ public class AdminProjectController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProjectDetailDto create(@AuthenticationPrincipal AuthUser me, @Valid @RequestBody CreateProject request) {
         return projects.createProject(me.id(), request);
+    }
+
+    @PutMapping("/projects/{id}/customer")
+    public ProjectDetailDto setCustomer(@PathVariable Long id, @Valid @RequestBody SetCustomer request) {
+        return projects.setCustomer(id, request.customerId());
     }
 
     @PostMapping("/projects/{id}/parts")
@@ -78,6 +89,30 @@ public class AdminProjectController {
     @PutMapping("/parts/{id}/raw-material")
     public ProjectDetailDto updateRawMaterial(@PathVariable Long id, @Valid @RequestBody RawMaterialInput request) {
         return projects.updateRawMaterial(id, request);
+    }
+
+    // ---- supplier rejections (each call returns the refreshed project) ----
+
+    @PostMapping("/stages/{id}/rejections")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProjectDetailDto addRejection(@PathVariable Long id, @Valid @RequestBody RejectionInput request) {
+        return projects.get(rejections.add(id, request));
+    }
+
+    @PutMapping("/rejections/{id}")
+    public ProjectDetailDto updateRejection(@PathVariable Long id, @Valid @RequestBody RejectionInput request) {
+        return projects.get(rejections.update(id, request));
+    }
+
+    @DeleteMapping("/rejections/{id}")
+    public ProjectDetailDto deleteRejection(@PathVariable Long id) {
+        return projects.get(rejections.delete(id));
+    }
+
+    /** All rejections, newest first; optionally only one supplier's. */
+    @GetMapping("/rejections")
+    public List<RejectionRowDto> listRejections(@RequestParam(required = false) Long supplierId) {
+        return rejections.list(supplierId);
     }
 
     @PutMapping("/stages/{id}/outsourcing")
