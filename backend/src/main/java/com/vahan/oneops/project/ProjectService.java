@@ -3,6 +3,8 @@ package com.vahan.oneops.project;
 import com.vahan.oneops.common.BadRequestException;
 import com.vahan.oneops.common.ConflictException;
 import com.vahan.oneops.common.NotFoundException;
+import com.vahan.oneops.customer.Customer;
+import com.vahan.oneops.customer.CustomerRepository;
 import com.vahan.oneops.project.ProjectDtos.AddPart;
 import com.vahan.oneops.project.ProjectDtos.AddStages;
 import com.vahan.oneops.project.ProjectDtos.CreateProject;
@@ -16,6 +18,7 @@ import com.vahan.oneops.project.ProjectDtos.PartDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectDetailDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectSummaryDto;
 import com.vahan.oneops.project.ProjectDtos.StageDto;
+import com.vahan.oneops.project.RejectionDtos.RejectionDto;
 import com.vahan.oneops.project.ProjectDtos.StageInput;
 import com.vahan.oneops.project.ProjectDtos.StageMasterDto;
 import com.vahan.oneops.project.ProjectDtos.UpdateStage;
@@ -48,10 +51,13 @@ public class ProjectService {
     private final UserDirectory users;
     private final SupplierRepository suppliers;
     private final MaterialRepository materials;
+    private final CustomerRepository customers;
+    private final RejectionRepository rejections;
 
     public ProjectService(ProjectRepository projects, ChildPartRepository parts, PartStageRepository stages,
                           StageMasterRepository masters, UserDirectory users, SupplierRepository suppliers,
-                          MaterialRepository materials) {
+                          MaterialRepository materials, CustomerRepository customers,
+                          RejectionRepository rejections) {
         this.projects = projects;
         this.parts = parts;
         this.stages = stages;
@@ -59,6 +65,8 @@ public class ProjectService {
         this.users = users;
         this.suppliers = suppliers;
         this.materials = materials;
+        this.customers = customers;
+        this.rejections = rejections;
     }
 
     // ---------- reading ----------
@@ -74,13 +82,15 @@ public class ProjectService {
                 .collect(Collectors.groupingBy(p -> p.getProject().getId(), Collectors.counting()));
         Map<Long, List<PartStage>> stagesByProject = stages.findForProjects(ids).stream()
                 .collect(Collectors.groupingBy(s -> s.getChildPart().getProject().getId()));
+        Map<Long, String> customerNames = customerNames(all.stream().map(Project::getCustomerId).collect(Collectors.toSet()));
 
         return all.stream().map(p -> {
             List<PartStage> ss = stagesByProject.getOrDefault(p.getId(), List.of());
             int done = (int) ss.stream().filter(s -> s.getStatus() == StageStatus.DONE).count();
             int unassigned = (int) ss.stream().filter(s -> s.getAssigneeId() == null).count();
             return new ProjectSummaryDto(p.getId(), p.getDrawingNo(), p.getName(), p.getCreatedAt(),
-                    partCounts.getOrDefault(p.getId(), 0L).intValue(), ss.size(), done, unassigned);
+                    partCounts.getOrDefault(p.getId(), 0L).intValue(), ss.size(), done, unassigned,
+                    p.getCustomerId() == null ? null : customerNames.get(p.getCustomerId()));
         }).toList();
     }
 
@@ -102,8 +112,33 @@ public class ProjectService {
         if (projects.existsByDrawingNo(drawingNo)) {
             throw new ConflictException("A project with drawing number " + drawingNo + " already exists");
         }
-        Project project = projects.save(new Project(drawingNo, r.name().trim(), adminId));
+        Project project = new Project(drawingNo, r.name().trim(), adminId);
+        if (r.customerId() != null) {
+            project.setCustomerId(requireActiveCustomer(r.customerId(), null).getId());
+        }
+        return detail(projects.save(project));
+    }
+
+    /** Sets (or changes) the project's customer. A customer deactivated since may stay on projects that have it. */
+    @Transactional
+    public ProjectDetailDto setCustomer(Long projectId, Long customerId) {
+        Project project = findProject(projectId);
+        project.setCustomerId(requireActiveCustomer(customerId, project.getCustomerId()).getId());
         return detail(project);
+    }
+
+    private Customer requireActiveCustomer(Long customerId, Long currentId) {
+        Customer c = customers.findById(customerId).orElseThrow(() -> new BadRequestException("Unknown customer"));
+        if (!c.isActive() && !c.getId().equals(currentId)) {
+            throw new BadRequestException("This customer is deactivated");
+        }
+        return c;
+    }
+
+    private Map<Long, String> customerNames(Set<Long> ids) {
+        ids.remove(null);
+        return ids.isEmpty() ? Map.of()
+                : customers.findAllById(ids).stream().collect(Collectors.toMap(Customer::getId, Customer::getName));
     }
 
     @Transactional
@@ -242,7 +277,15 @@ public class ProjectService {
                 throw new BadRequestException("This supplier is deactivated");
             }
         }
+        if (supplierId == null && (r.sentOn() != null || r.receivedOn() != null)) {
+            throw new BadRequestException("Sent and received dates are only for a stage given to a supplier");
+        }
+        if (r.sentOn() != null && r.receivedOn() != null && r.receivedOn().isBefore(r.sentOn())) {
+            throw new BadRequestException("The received date cannot be before the sent date");
+        }
         stage.setSupplierId(supplierId);
+        stage.setSentOn(r.sentOn());
+        stage.setReceivedOn(r.receivedOn());
         stage.setJobQty(r.jobQty());
         stage.setRatePerUnit(r.ratePerUnit());
         stage.setPreInspectionDone(r.preInspectionDone());
@@ -257,6 +300,9 @@ public class ProjectService {
         PartStage stage = findStage(stageId);
         if (stage.getStatus() != StageStatus.NOT_STARTED) {
             throw new ConflictException("Only stages that have not started can be removed");
+        }
+        if (rejections.existsByPartStageId(stage.getId())) {
+            throw new ConflictException("This stage has rejections recorded; delete them first");
         }
         Project project = stage.getChildPart().getProject();
         stages.delete(stage);
@@ -297,9 +343,15 @@ public class ProjectService {
         Map<Long, String> supplierNames = supplierIds.isEmpty() ? Map.of()
                 : suppliers.findAllById(supplierIds).stream().collect(Collectors.toMap(Supplier::getId, Supplier::getName));
 
+        Map<Long, List<RejectionDto>> rejectionsByStage = allStages.isEmpty() ? Map.of()
+                : rejections.findByPartStageIdInOrderByIdAsc(allStages.stream().map(PartStage::getId).toList()).stream()
+                        .collect(Collectors.groupingBy(Rejection::getPartStageId,
+                                Collectors.mapping(RejectionDto::from, Collectors.toList())));
+
         Map<Long, List<StageDto>> byPart = allStages.stream().collect(Collectors.groupingBy(
                 s -> s.getChildPart().getId(),
-                Collectors.mapping(s -> StageDto.from(s, names, supplierNames), Collectors.toList())));
+                Collectors.mapping(s -> StageDto.from(s, names, supplierNames,
+                        rejectionsByStage.getOrDefault(s.getId(), List.of())), Collectors.toList())));
 
         Set<Long> materialIds = new HashSet<>();
         childParts.forEach(p -> {
@@ -320,8 +372,10 @@ public class ProjectService {
             partDtos.add(new PartDto(p.getId(), p.getDrawingNo(), p.getName(), p.getQuantity(),
                     byPart.getOrDefault(p.getId(), List.of()), rm));
         }
+        Long customerId = project.getCustomerId();
         return new ProjectDetailDto(project.getId(), project.getDrawingNo(), project.getName(),
-                project.getCreatedAt(), partDtos, totalCost);
+                project.getCreatedAt(), partDtos, totalCost, customerId,
+                customerId == null ? null : customerNames(new HashSet<>(Set.of(customerId))).get(customerId));
     }
 
     /**

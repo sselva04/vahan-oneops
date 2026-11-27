@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -14,6 +15,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
+import com.vahan.oneops.project.RejectionDtos.RejectionDto;
 
 /** Request and response shapes of the project module, grouped in one file. */
 public final class ProjectDtos {
@@ -23,9 +26,14 @@ public final class ProjectDtos {
 
     // ---------- requests ----------
 
+    /** customerId: the project's fixed customer. The screen requires it for new projects. */
     public record CreateProject(
             @NotBlank @Size(max = 60) String drawingNo,
-            @NotBlank @Size(max = 200) String name) {
+            @NotBlank @Size(max = 200) String name,
+            Long customerId) {
+    }
+
+    public record SetCustomer(@NotNull(message = "Choose a customer") Long customerId) {
     }
 
     public record AddPart(
@@ -61,7 +69,9 @@ public final class ProjectDtos {
             @Digits(integer = 10, fraction = 2, message = "Rate can have at most 2 decimals") BigDecimal ratePerUnit,
             boolean preInspectionDone,
             boolean finalInspectionDone,
-            @Size(max = 500) String remarks) {
+            @Size(max = 500) String remarks,
+            LocalDate sentOn,
+            LocalDate receivedOn) {
     }
 
     // ---------- responses ----------
@@ -77,8 +87,10 @@ public final class ProjectDtos {
                            Instant startedAt, Instant completedAt,
                            Long supplierId, String supplierName, Integer jobQty, BigDecimal ratePerUnit,
                            BigDecimal totalCost, boolean preInspectionDone, boolean finalInspectionDone,
-                           String remarks) {
-        static StageDto from(PartStage s, Map<Long, String> names, Map<Long, String> supplierNames) {
+                           String remarks, LocalDate sentOn, LocalDate receivedOn, Integer turnaroundDays,
+                           int rejectedQty, List<RejectionDto> rejections) {
+        static StageDto from(PartStage s, Map<Long, String> names, Map<Long, String> supplierNames,
+                             List<RejectionDto> rejections) {
             Long assignee = s.getAssigneeId();
             Long supplier = s.getSupplierId();
             BigDecimal total = s.getJobQty() != null && s.getRatePerUnit() != null
@@ -87,7 +99,11 @@ public final class ProjectDtos {
                     s.getSequenceNo(), assignee, assignee == null ? null : names.get(assignee),
                     s.getStatus(), s.getDueDate(), s.getStartedAt(), s.getCompletedAt(),
                     supplier, supplier == null ? null : supplierNames.get(supplier), s.getJobQty(),
-                    s.getRatePerUnit(), total, s.isPreInspectionDone(), s.isFinalInspectionDone(), s.getRemarks());
+                    s.getRatePerUnit(), total, s.isPreInspectionDone(), s.isFinalInspectionDone(), s.getRemarks(),
+                    s.getSentOn(), s.getReceivedOn(),
+                    s.getSentOn() != null && s.getReceivedOn() != null
+                            ? (int) java.time.temporal.ChronoUnit.DAYS.between(s.getSentOn(), s.getReceivedOn()) : null,
+                    rejections.stream().mapToInt(RejectionDto::rejectedQty).sum(), rejections);
         }
     }
 
@@ -120,11 +136,12 @@ public final class ProjectDtos {
     }
 
     public record ProjectDetailDto(Long id, String drawingNo, String name, Instant createdAt, List<PartDto> parts,
-                                   BigDecimal rawMaterialCost) {
+                                   BigDecimal rawMaterialCost, Long customerId, String customerName) {
     }
 
     public record ProjectSummaryDto(Long id, String drawingNo, String name, Instant createdAt,
-                                    int partCount, int stageCount, int stagesDone, int stagesUnassigned) {
+                                    int partCount, int stageCount, int stagesDone, int stagesUnassigned,
+                                    String customerName) {
     }
 
     /** One row of "My work": a stage allocated to a person, with enough context to show it on its own. */

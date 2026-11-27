@@ -82,6 +82,13 @@ public class PartStage {
     @Column(length = 500)
     private String remarks;
 
+    /** When the job went to the supplier and when it came back. */
+    @Column(name = "sent_on")
+    private LocalDate sentOn;
+
+    @Column(name = "received_on")
+    private LocalDate receivedOn;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -120,6 +127,10 @@ public class PartStage {
     public boolean isFinalInspectionDone() { return finalInspectionDone; }
     public void setFinalInspectionDone(boolean finalInspectionDone) { this.finalInspectionDone = finalInspectionDone; }
     public String getRemarks() { return remarks; }
+    public LocalDate getSentOn() { return sentOn; }
+    public void setSentOn(LocalDate sentOn) { this.sentOn = sentOn; }
+    public LocalDate getReceivedOn() { return receivedOn; }
+    public void setReceivedOn(LocalDate receivedOn) { this.receivedOn = receivedOn; }
     public void setRemarks(String remarks) { this.remarks = remarks; }
 
     public void start() {

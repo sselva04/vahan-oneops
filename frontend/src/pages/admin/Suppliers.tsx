@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../api'
-import { ErrorNote, errorText } from '../../components'
+import { ErrorNote, errorText, formatMoney } from '../../components'
 import type { StageMaster, Supplier, SupplierInput } from '../../types'
 
 /** Phone numbers are tappable on a phone: "9944363952, 6374278193" becomes two links. */
@@ -83,7 +83,7 @@ export default function Suppliers() {
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>Supplier</th><th>Processes and contacts</th><th>Status</th><th></th></tr>
+            <tr><th>Supplier</th><th>Processes and contacts</th><th>Track record</th><th>Status</th><th></th></tr>
           </thead>
           <tbody>
             {shown.map(s => (
@@ -103,6 +103,16 @@ export default function Suppliers() {
                     ))}
                     {s.processes.length === 0 && <li className="muted">No processes yet</li>}
                   </ul>
+                </td>
+                <td className="small">
+                  {s.jobsReceived > 0
+                    ? <>Avg turnaround <strong>{s.avgTurnaroundDays} days</strong> <span className="muted">({s.jobsReceived} jobs)</span></>
+                    : <span className="muted">No jobs received yet</span>}
+                  <div>
+                    {s.debitTotal > 0
+                      ? <>Debited <strong>{formatMoney(s.debitTotal)}</strong> <span className="muted">({s.rejectedQty} pcs rejected)</span></>
+                      : <span className="muted">No rejections</span>}
+                  </div>
                 </td>
                 <td>{s.active ? 'Active' : 'Deactivated'}</td>
                 <td className="actions">

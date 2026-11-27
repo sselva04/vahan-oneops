@@ -3,6 +3,9 @@ package com.vahan.oneops.supplier;
 import com.vahan.oneops.common.BadRequestException;
 import com.vahan.oneops.common.ConflictException;
 import com.vahan.oneops.common.NotFoundException;
+import com.vahan.oneops.project.PartStage;
+import com.vahan.oneops.project.PartStageRepository;
+import com.vahan.oneops.project.RejectionRepository;
 import com.vahan.oneops.project.StageMaster;
 import com.vahan.oneops.project.StageMasterRepository;
 import com.vahan.oneops.supplier.SupplierDtos.ProcessDto;
@@ -12,7 +15,10 @@ import com.vahan.oneops.supplier.SupplierDtos.SupplierInput;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +32,17 @@ public class SupplierService {
     private final SupplierRepository suppliers;
     private final SupplierProcessRepository processes;
     private final StageMasterRepository masters;
+    private final RejectionRepository rejections;
+    private final PartStageRepository stages;
 
     public SupplierService(SupplierRepository suppliers, SupplierProcessRepository processes,
-                           StageMasterRepository masters) {
+                           StageMasterRepository masters, RejectionRepository rejections,
+                           PartStageRepository stages) {
         this.suppliers = suppliers;
         this.processes = processes;
         this.masters = masters;
+        this.rejections = rejections;
+        this.stages = stages;
     }
 
     // ---------- reading ----------
@@ -115,10 +126,24 @@ public class SupplierService {
                         Collectors.mapping(p -> new ProcessDto(p.getId(), p.getStageMaster().getId(),
                                 p.getStageMaster().getName(), p.getContactPerson(), p.getContactPhone()),
                                 Collectors.toList())));
+        Map<Long, Object[]> debits = new HashMap<>();
+        for (Object[] row : rejections.totalsBySupplier()) {
+            debits.put((Long) row[0], row);
+        }
+        Map<Long, List<PartStage>> received = stages.findReceivedForSuppliers(ids).stream()
+                .collect(Collectors.groupingBy(PartStage::getSupplierId));
         return list.stream()
                 .sorted(Comparator.comparing(Supplier::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(s -> new SupplierDto(s.getId(), s.getName(), s.getAddress(), s.getMapUrl(), s.isActive(),
-                        byId.getOrDefault(s.getId(), List.of())))
+                .map(s -> {
+                    Object[] d = debits.get(s.getId());
+                    List<PartStage> done = received.getOrDefault(s.getId(), List.of());
+                    Double avg = done.isEmpty() ? null : done.stream()
+                            .mapToLong(x -> ChronoUnit.DAYS.between(x.getSentOn(), x.getReceivedOn())).average().orElse(0);
+                    return new SupplierDto(s.getId(), s.getName(), s.getAddress(), s.getMapUrl(), s.isActive(),
+                            byId.getOrDefault(s.getId(), List.of()),
+                            d == null ? BigDecimal.ZERO : (BigDecimal) d[1], d == null ? 0L : ((Number) d[2]).longValue(),
+                            avg == null ? null : Math.round(avg * 10) / 10.0, done.size());
+                })
                 .toList();
     }
 

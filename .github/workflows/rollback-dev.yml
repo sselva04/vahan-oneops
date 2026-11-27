@@ -1,0 +1,79 @@
+name: Roll back dev
+
+# Manual: Actions -> "Roll back dev" -> Run workflow -> paste the full 40-character commit SHA
+# of a version that worked before (find it in the CI runs list or `git log` on main).
+# It redeploys the images already built for that commit; nothing is rebuilt.
+# Database: migrations only ever ADD things, so the older app runs on the newer schema.
+# (A pre-deploy database backup is taken first, as for every deploy.)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Full 40-character commit SHA on main to deploy'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Check the SHA looks right
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Give the full 40-character lowercase SHA"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the commit is on main
+        run: |
+          git cat-file -e "$SHA^{commit}"
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "$SHA is not on main"; exit 1; }
+
+      - name: Check images exist for that commit
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          OWNER="${{ github.repository_owner }}"
+          for part in backend frontend; do
+            docker manifest inspect "ghcr.io/${OWNER,,}/vahan-oneops-${part}:${SHA}" > /dev/null \
+              || { echo "No ${part} image for ${SHA}"; exit 1; }
+          done
+
+      # Use the deploy scripts as they were at that commit, so the rollback matches that version.
+      - name: Check out that commit
+        run: git checkout --detach "$SHA"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::349152668028:role/github-deploy-dev
+          aws-region: ap-south-1
+
+      - name: Deploy
+        run: bash scripts/ci/deploy-dev.sh "$SHA"
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://oneops-dev.vahanengg.in/ || true)
+            echo "frontend: $code"
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          [ "$code" = "200" ]
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://oneops-dev.vahanengg.in/api/auth/login \
+                 -H 'Content-Type: application/json' -d '{"username":"x","password":"x"}')
+          echo "api login (expect 401): $code"
+          [ "$code" = "401" ]

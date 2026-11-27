@@ -11,6 +11,8 @@ spring:
       ddl-auto: validate   # schema is owned by Flyway migrations, never by Hibernate
   flyway:
     enabled: true
+    # Rolling back to an older version: it must start even though the database has newer migrations it does not know.
+    ignore-migration-patterns: "*:future"
 
 server:
   port: 8080
