@@ -12,3 +12,7 @@ frontend/dist/
 *.tfstate.*
 terraform.tfvars
 crash.log
+
+# Real business data converted for the dev import: never commit
+import.json
+*import*.json

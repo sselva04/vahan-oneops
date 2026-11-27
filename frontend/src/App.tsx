@@ -13,6 +13,7 @@ import Tools from './pages/admin/Tools'
 import Purchases from './pages/admin/Purchases'
 import Rejections from './pages/admin/Rejections'
 import Reports from './pages/admin/Reports'
+import ImportData from './pages/admin/ImportData'
 import Suppliers from './pages/admin/Suppliers'
 import ProjectDetailPage from './pages/admin/ProjectDetail'
 import type { ReactNode } from 'react'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/admin/rejections" element={<RequireAdmin><Rejections /></RequireAdmin>} />
         <Route path="/admin/purchases" element={<RequireAdmin><Purchases /></RequireAdmin>} />
         <Route path="/admin/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
+        <Route path="/admin/import" element={<RequireAdmin><ImportData /></RequireAdmin>} />
         <Route path="/admin/machine-hours" element={<RequireAdmin><MachineHours /></RequireAdmin>} />
         <Route path="/admin/tools" element={<RequireAdmin><Tools /></RequireAdmin>} />
         <Route path="/admin/users" element={<RequireAdmin><Users /></RequireAdmin>} />
