@@ -18,3 +18,9 @@ variable "disk_size_gb" {
   type    = number
   default = 30
 }
+
+variable "github_sub_prefix" {
+  description = "Start of the GitHub OIDC subject for this repository (immutable-id format, same value as in bootstrap)."
+  type        = string
+  default     = "repo:sselva04@95541329/vahan-oneops@1473112517"
+}

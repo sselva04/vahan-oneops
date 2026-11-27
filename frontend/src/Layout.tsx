@@ -12,6 +12,7 @@ export default function Layout() {
         <div className="brand">VAHAN <span>OneOps</span></div>
         <nav>
           {isAdmin && <NavLink to="/admin/projects">Projects</NavLink>}
+          {isAdmin && <NavLink to="/admin/suppliers">Suppliers</NavLink>}
           {isAdmin && <NavLink to="/admin/users">Users</NavLink>}
           <NavLink to="/my-work">My work</NavLink>
         </nav>

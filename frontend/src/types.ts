@@ -27,6 +27,15 @@ export interface Stage {
   dueDate: string | null
   startedAt: string | null
   completedAt: string | null
+  // set when the stage is given to a supplier
+  supplierId: number | null
+  supplierName: string | null
+  jobQty: number | null
+  ratePerUnit: number | null
+  totalCost: number | null
+  preInspectionDone: boolean
+  finalInspectionDone: boolean
+  remarks: string | null
 }
 
 export interface Part {
@@ -72,6 +81,41 @@ export interface WorkItem {
   startedAt: string | null
   completedAt: string | null
   waitingFor: string[]
+  supplierName: string | null
+}
+
+export interface SupplierProcess {
+  id: number
+  stageMasterId: number
+  stageName: string
+  contactPerson: string | null
+  contactPhone: string | null
+}
+
+export interface Supplier {
+  id: number
+  name: string
+  address: string | null
+  mapUrl: string | null
+  active: boolean
+  processes: SupplierProcess[]
+}
+
+export interface SupplierInput {
+  name: string
+  address: string | null
+  mapUrl: string | null
+  processes: { stageName: string; contactPerson: string | null; contactPhone: string | null }[]
+}
+
+/** Gives a stage to a supplier (supplierId) or back to in-house (supplierId = null). */
+export interface OutsourceInput {
+  supplierId: number | null
+  jobQty: number | null
+  ratePerUnit: number | null
+  preInspectionDone: boolean
+  finalInspectionDone: boolean
+  remarks: string | null
 }
 
 export const STATUS_LABEL: Record<StageStatus, string> = {

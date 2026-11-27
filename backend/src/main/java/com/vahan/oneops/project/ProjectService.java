@@ -6,6 +6,7 @@ import com.vahan.oneops.common.NotFoundException;
 import com.vahan.oneops.project.ProjectDtos.AddPart;
 import com.vahan.oneops.project.ProjectDtos.AddStages;
 import com.vahan.oneops.project.ProjectDtos.CreateProject;
+import com.vahan.oneops.project.ProjectDtos.OutsourceInput;
 import com.vahan.oneops.project.ProjectDtos.PartDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectDetailDto;
 import com.vahan.oneops.project.ProjectDtos.ProjectSummaryDto;
@@ -13,6 +14,8 @@ import com.vahan.oneops.project.ProjectDtos.StageDto;
 import com.vahan.oneops.project.ProjectDtos.StageInput;
 import com.vahan.oneops.project.ProjectDtos.StageMasterDto;
 import com.vahan.oneops.project.ProjectDtos.UpdateStage;
+import com.vahan.oneops.supplier.Supplier;
+import com.vahan.oneops.supplier.SupplierRepository;
 import com.vahan.oneops.user.UserDirectory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,14 +39,16 @@ public class ProjectService {
     private final PartStageRepository stages;
     private final StageMasterRepository masters;
     private final UserDirectory users;
+    private final SupplierRepository suppliers;
 
     public ProjectService(ProjectRepository projects, ChildPartRepository parts, PartStageRepository stages,
-                          StageMasterRepository masters, UserDirectory users) {
+                          StageMasterRepository masters, UserDirectory users, SupplierRepository suppliers) {
         this.projects = projects;
         this.parts = parts;
         this.stages = stages;
         this.masters = masters;
         this.users = users;
+        this.suppliers = suppliers;
     }
 
     // ---------- reading ----------
@@ -123,6 +128,36 @@ public class ProjectService {
         return detail(stage.getChildPart().getProject());
     }
 
+    /**
+     * Gives a stage to a supplier (or takes it back in-house) and records the job details:
+     * pieces sent, rate per piece, inspections and remarks.
+     */
+    @Transactional
+    public ProjectDetailDto updateOutsourcing(Long stageId, OutsourceInput r) {
+        PartStage stage = findStage(stageId);
+        Long supplierId = r.supplierId();
+        if (supplierId == null) {
+            if (r.jobQty() != null || r.ratePerUnit() != null) {
+                throw new BadRequestException("Quantity and rate are only for a stage given to a supplier");
+            }
+        } else {
+            Supplier supplier = suppliers.findById(supplierId)
+                    .orElseThrow(() -> new BadRequestException("Unknown supplier"));
+            // A supplier deactivated since this stage was given to them may stay on it; it just cannot be newly chosen.
+            if (!supplier.isActive() && !supplierId.equals(stage.getSupplierId())) {
+                throw new BadRequestException("This supplier is deactivated");
+            }
+        }
+        stage.setSupplierId(supplierId);
+        stage.setJobQty(r.jobQty());
+        stage.setRatePerUnit(r.ratePerUnit());
+        stage.setPreInspectionDone(r.preInspectionDone());
+        stage.setFinalInspectionDone(r.finalInspectionDone());
+        String remarks = r.remarks() == null ? null : r.remarks().trim();
+        stage.setRemarks(remarks == null || remarks.isEmpty() ? null : remarks);
+        return detail(stage.getChildPart().getProject());
+    }
+
     @Transactional
     public ProjectDetailDto deleteStage(Long stageId) {
         PartStage stage = findStage(stageId);
@@ -159,8 +194,18 @@ public class ProjectService {
         });
         Map<Long, String> names = users.displayNames(assigneeIds);
 
+        Set<Long> supplierIds = new HashSet<>();
+        allStages.forEach(s -> {
+            if (s.getSupplierId() != null) {
+                supplierIds.add(s.getSupplierId());
+            }
+        });
+        Map<Long, String> supplierNames = supplierIds.isEmpty() ? Map.of()
+                : suppliers.findAllById(supplierIds).stream().collect(Collectors.toMap(Supplier::getId, Supplier::getName));
+
         Map<Long, List<StageDto>> byPart = allStages.stream().collect(Collectors.groupingBy(
-                s -> s.getChildPart().getId(), Collectors.mapping(s -> StageDto.from(s, names), Collectors.toList())));
+                s -> s.getChildPart().getId(),
+                Collectors.mapping(s -> StageDto.from(s, names, supplierNames), Collectors.toList())));
 
         List<PartDto> partDtos = new ArrayList<>();
         for (ChildPart p : childParts) {

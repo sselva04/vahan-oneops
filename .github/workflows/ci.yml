@@ -39,7 +39,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Only after the three checks pass, and only on main: build the images and publish them
-  # (tagged with the commit). Deploying them to the cluster is the next workflow, added once the cluster exists.
+  # (tagged with the commit). The deploy-dev job below then rolls them out.
   images:
     if: github.ref == 'refs/heads/main'
     needs: [backend, frontend, secret-scan]
@@ -63,3 +63,60 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/vahan-oneops-${{ matrix.part }}:${{ github.sha }}
+
+  # Roll the new images out to the dev server. Nobody runs commands by hand.
+  # Order on the server: backup -> deploy -> health wait -> automatic rollback if unhealthy.
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    needs: [images]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # If this same commit also changes the infrastructure, let Terraform finish first
+      # (it creates the role this job signs in with).
+      - name: Wait for Terraform on this commit
+        run: |
+          sleep 45
+          for i in $(seq 1 60); do
+            R=$(gh api "repos/${{ github.repository }}/actions/workflows/terraform-dev.yml/runs?head_sha=${{ github.sha }}" \
+                --jq '[.workflow_runs[] | select(.event=="push")][0] | "\(.status) \(.conclusion)"')
+            echo "terraform run: ${R:-none}"
+            case "$R" in
+              ""|"null null"|none) break;;
+              completed\ success) break;;
+              completed*) echo "Terraform failed - not deploying"; exit 1;;
+            esac
+            sleep 20
+          done
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::349152668028:role/github-deploy-dev
+          aws-region: ap-south-1
+
+      - name: Deploy
+        run: bash scripts/ci/deploy-dev.sh "${{ github.sha }}"
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://oneops-dev.vahanengg.in/ || true)
+            echo "frontend: $code"
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          [ "$code" = "200" ]
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://oneops-dev.vahanengg.in/api/auth/login \
+                 -H 'Content-Type: application/json' -d '{"username":"x","password":"x"}')
+          echo "api login (wrong password, expect 401): $code"
+          [ "$code" = "401" ]

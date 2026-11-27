@@ -6,6 +6,7 @@ import MyWork from './pages/MyWork'
 import ChangePassword from './pages/ChangePassword'
 import Users from './pages/admin/Users'
 import Projects from './pages/admin/Projects'
+import Suppliers from './pages/admin/Suppliers'
 import ProjectDetailPage from './pages/admin/ProjectDetail'
 import type { ReactNode } from 'react'
 
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/password" element={<ChangePassword />} />
         <Route path="/admin/projects" element={<RequireAdmin><Projects /></RequireAdmin>} />
         <Route path="/admin/projects/:id" element={<RequireAdmin><ProjectDetailPage /></RequireAdmin>} />
+        <Route path="/admin/suppliers" element={<RequireAdmin><Suppliers /></RequireAdmin>} />
         <Route path="/admin/users" element={<RequireAdmin><Users /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
